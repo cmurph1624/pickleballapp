@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pickleball App</title>
+    <link rel="stylesheet" href="index.css">
+    <link rel="icon" href="favicon.ico">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2ecc71">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+                .then(() => console.log('Service Worker Registered'))
+                .catch((err) => console.error('Service Worker Failed', err));
+        }
+    </script>
+</head>
+
+<body>
+    <div id="app">
+        <header>
+            <h1>Pickleball App</h1>
+            <div id="user-container">
+                <button id="login-btn" hidden>Login with Google</button>
+                <div id="user-info" hidden>
+                    <img id="user-photo" src="" alt="User Photo" referrerpolicy="no-referrer">
+                    <span id="user-name"></span>
+                    <button id="logout-btn">Logout</button>
+                </div>
+            </div>
+        </header>
+
+        <nav id="main-nav">
+            <button id="nav-leagues" class="active">Leagues</button>
+            <button id="nav-players">Players</button>
+        </nav>
+
+        <main>
+            <section id="leagues-section">
+                <h2>Leagues</h2>
+                <ul id="league-list">
+                    <!-- Leagues will be loaded here -->
+                </ul>
+                <button id="add-league-btn" class="fab">+</button>
+            </section>
+
+            <section id="players-section" hidden>
+                <h2>Players</h2>
+                <ul id="player-list">
+                    <!-- Players will be loaded here -->
+                </ul>
+                <button id="add-player-btn" class="fab">+</button>
+            </section>
+
+            <section id="league-details-section" hidden>
+                <div class="section-header">
+                    <button id="back-to-leagues-btn" class="secondary">Back</button>
+                    <h2 id="league-details-title">League Name</h2>
+                </div>
+                <ul id="week-list">
+                    <!-- Weeks will be loaded here -->
+                </ul>
+                <button id="add-week-btn" class="fab">+</button>
+            </section>
+        </main>
+
+        <!-- Week Modal -->
+        <div id="week-modal" class="modal" hidden>
+            <div class="modal-content">
+                <h3 id="week-modal-title">Add Week</h3>
+                <form id="week-form">
+                    <input type="hidden" id="week-id">
+                    <div class="form-group">
+                        <label for="week-name">Week Name</label>
+                        <input type="text" id="week-name" required placeholder="e.g. Week 1">
+                    </div>
+                    <div class="form-group">
+                        <label>Select Players</label>
+                        <div id="week-players-list" class="checkbox-list">
+                            <!-- League Players will be loaded here -->
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" id="cancel-week-btn" class="secondary">Cancel</button>
+                        <button type="submit" id="save-week-btn">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- League Modal -->
+        <div id="league-modal" class="modal" hidden>
+            <div class="modal-content">
+                <h3 id="league-modal-title">Create League</h3>
+                <form id="league-form">
+                    <input type="hidden" id="league-id">
+                    <div class="form-group">
+                        <label for="league-name">League Name</label>
+                        <input type="text" id="league-name" required>
+                        <span id="name-error" class="error-message" hidden>League Name already exists</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="start-date">Start Date</label>
+                        <input type="date" id="start-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="end-date">End Date</label>
+                        <input type="date" id="end-date" required>
+                        <span id="date-error" class="error-message" hidden>End Date cannot be before Start Date</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="league-type">Type</label>
+                        <select id="league-type" required>
+                            <option value="Cumulative">Cumulative</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Select Players</label>
+                        <div id="league-players-list" class="checkbox-list">
+                            <!-- Players will be loaded here -->
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" id="cancel-league-btn" class="secondary">Cancel</button>
+                        <button type="submit" id="save-league-btn">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Delete Confirmation Modal -->
+        <div id="delete-modal" class="modal" hidden>
+            <div class="modal-content">
+                <h3>Confirm Delete</h3>
+                <p>Are you sure you want to delete this league? This action cannot be undone.</p>
+                <div class="modal-actions">
+                    <button id="cancel-delete-btn" class="secondary">Cancel</button>
+                    <button id="confirm-delete-btn" class="delete-btn">Delete</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Player Modal -->
+        <div id="player-modal" class="modal" hidden>
+            <div class="modal-content">
+                <h3 id="modal-title">Add Player</h3>
+                <form id="player-form">
+                    <input type="hidden" id="player-id">
+                    <div class="form-group">
+                        <label for="first-name">First Name</label>
+                        <input type="text" id="first-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="last-name">Last Name</label>
+                        <input type="text" id="last-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="gender">Gender</label>
+                        <select id="gender" required>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="dupr-doubles">DUPR Doubles</label>
+                        <input type="number" id="dupr-doubles" step="0.01" min="2.0" max="8.0" placeholder="e.g. 3.50">
+                    </div>
+                    <div class="form-group">
+                        <label for="dupr-singles">DUPR Singles</label>
+                        <input type="number" id="dupr-singles" step="0.01" min="2.0" max="8.0" placeholder="e.g. 3.50">
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" id="cancel-player-btn" class="secondary">Cancel</button>
+                        <button type="submit" id="save-player-btn">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module" src="index.js"></script>
+</body>
+
+</html>
