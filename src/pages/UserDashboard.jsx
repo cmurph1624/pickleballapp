@@ -112,7 +112,22 @@ const UserDashboard = () => {
                                     <Grid container spacing={2}>
                                         {upcomingWeeks.map((week) => (
                                             <Grid item xs={12} lg={6} key={week.id}>
-                                                <Paper variant="outlined" sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '100%' }}>
+                                                <Paper
+                                                    variant="outlined"
+                                                    sx={{
+                                                        p: 2,
+                                                        display: 'flex',
+                                                        justifyContent: 'space-between',
+                                                        alignItems: 'center',
+                                                        height: '100%',
+                                                        cursor: 'pointer',
+                                                        transition: 'background-color 0.2s',
+                                                        '&:hover': {
+                                                            backgroundColor: 'rgba(0, 0, 0, 0.04)', // Light grey on hover
+                                                        }
+                                                    }}
+                                                    onClick={() => navigate(`/clubs/${week.clubId || 'unknown'}/leagues/${week.leagueId}/weeks/${week.id}`)}
+                                                >
                                                     <Box>
                                                         <Typography variant="h6" color="primary">
                                                             {week.name}
@@ -125,13 +140,6 @@ const UserDashboard = () => {
                                                             sx={{ mt: 0.5 }}
                                                         />
                                                     </Box>
-                                                    <Button
-                                                        variant="outlined"
-                                                        size="small"
-                                                        onClick={() => navigate(`/clubs/${week.clubId || 'unknown'}/leagues/${week.leagueId}/weeks/${week.id}`)}
-                                                    >
-                                                        View
-                                                    </Button>
                                                 </Paper>
                                             </Grid>
                                         ))}
