@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Typography, Box, Button, Paper, Grid, IconButton, List, ListItem, ListItemText } from '@mui/material';
-import { ArrowBack, Refresh, Delete } from '@mui/icons-material';
+import { ArrowBack, Refresh, Delete, CheckCircle, Lock } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { generateMatches } from '../utils/matchGenerator';
 import { calculateSpread } from '../services/Oddsmaker';
-import { updateRatings } from '../services/RatingEngine';
-import { resolveBetsForMatch } from '../services/BettingService';
 import { useAuth } from '../contexts/AuthContext';
 import { useClub } from '../contexts/ClubContext';
+import { completeWeek } from '../services/WeekService';
 
 import ScoreModal from '../components/ScoreModal';
 import PlaceBetModal from '../components/PlaceBetModal';
@@ -127,39 +126,37 @@ const WeekDetails = () => {
 
         try {
             // 2. Save Match Score to Firestore
+            // Note: Ratings and Bets are now resolved in handleCompleteWeek
             await updateDoc(doc(db, 'weeks', weekId), {
                 matches: updatedMatches
             });
 
-            // 3. Calculate and Update Player Ratings
-            const match = matches.find(m => m.id === matchId);
-            if (match) {
-                const matchWithScore = { ...match, team1Score, team2Score };
-                const team1Players = players.filter(p => match.team1.includes(p.id));
-                const team2Players = players.filter(p => match.team2.includes(p.id));
-
-                const updatedPlayers = updateRatings(matchWithScore, team1Players, team2Players);
-
-                // 4. Batch Update Players in Firestore
-                const updates = updatedPlayers.map(p =>
-                    updateDoc(doc(db, 'players', p.id), { hiddenRating: p.hiddenRating })
-                );
-                await Promise.all(updates);
-                console.log("Updated ratings for", updatedPlayers.length, "players");
-
-                // 5. Update local players state to reflect new ratings immediately
-                setPlayers(prevPlayers => prevPlayers.map(p => {
-                    const updated = updatedPlayers.find(up => up.id === p.id);
-                    return updated ? updated : p;
-                }));
-
-                // 6. Resolve Bets
-                await resolveBetsForMatch(matchId, team1Score, team2Score, matchWithScore);
-            }
-
         } catch (error) {
             console.error("Error saving score:", error);
             alert("Error saving score: " + error.message);
+        }
+    };
+
+    const handleCompleteWeek = async () => {
+        if (!window.confirm("Are you sure you want to COMPLETE this week? This will update player ratings, resolve bets (and refund unplayed ones), and lock the week.")) {
+            return;
+        }
+
+        try {
+            setLoading(true);
+            const updatedPlayers = await completeWeek(weekId);
+
+            setWeek(prev => ({ ...prev, status: 'COMPLETED' }));
+            if (updatedPlayers) {
+                setPlayers(updatedPlayers);
+            }
+            alert("Week completed successfully!");
+
+        } catch (error) {
+            console.error("Error completing week:", error);
+            alert("Error completing week: " + error.message);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -195,24 +192,41 @@ const WeekDetails = () => {
 
             {isAdmin && (
                 <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-                    <Button
-                        variant="contained"
-                        startIcon={<Refresh />}
-                        onClick={handleGenerateMatches}
-                        disabled={matches.some(m => m.team1Score !== undefined || m.team2Score !== undefined)}
-                    >
-                        Generate Matches
-                    </Button>
-                    {matches.length > 0 && (
-                        <Button
-                            variant="outlined"
-                            color="error"
-                            startIcon={<Delete />}
-                            onClick={handleClearMatches}
-                            disabled={matches.some(m => m.team1Score !== undefined || m.team2Score !== undefined)}
-                        >
-                            Clear Matches
+                    {week.status === 'COMPLETED' ? (
+                        <Button variant="contained" disabled startIcon={<Lock />}>
+                            Week Completed
                         </Button>
+                    ) : (
+                        <>
+                            <Button
+                                variant="contained"
+                                startIcon={<Refresh />}
+                                onClick={handleGenerateMatches}
+                                disabled={matches.some(m => m.team1Score !== undefined || m.team2Score !== undefined)}
+                            >
+                                Generate Matches
+                            </Button>
+                            {matches.length > 0 && (
+                                <Button
+                                    variant="outlined"
+                                    color="error"
+                                    startIcon={<Delete />}
+                                    onClick={handleClearMatches}
+                                    disabled={matches.some(m => m.team1Score !== undefined || m.team2Score !== undefined)}
+                                >
+                                    Clear Matches
+                                </Button>
+                            )}
+                            <Button
+                                variant="contained"
+                                color="success"
+                                startIcon={<CheckCircle />}
+                                onClick={handleCompleteWeek}
+                                sx={{ ml: 'auto' }}
+                            >
+                                Complete Week
+                            </Button>
+                        </>
                     )}
                 </Box>
             )}
@@ -245,7 +259,11 @@ const WeekDetails = () => {
                                                 '&:hover': { bgcolor: 'action.hover' },
                                                 transition: 'background-color 0.2s'
                                             }}
-                                            onClick={() => handleMatchClick(match)}
+                                            onClick={() => {
+                                                if (week.status !== 'COMPLETED') {
+                                                    handleMatchClick(match);
+                                                }
+                                            }}
                                         >
                                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                                                 <Box>
@@ -290,7 +308,7 @@ const WeekDetails = () => {
                                             </Grid>
 
                                             {/* Betting Button */}
-                                            {week.bettingDeadline && new Date() < new Date(week.bettingDeadline) && match.team1Score === undefined && (
+                                            {week.bettingDeadline && new Date() < new Date(week.bettingDeadline) && match.team1Score === undefined && week.status !== 'COMPLETED' && (
                                                 <Button
                                                     variant="outlined"
                                                     size="small"

@@ -132,3 +132,62 @@ export const resolveBetsForMatch = async (matchId, team1Score, team2Score, match
         console.error("Error resolving bets:", error);
     }
 };
+
+/**
+ * Refunds all OPEN bets for a specific match.
+ * Used when a match is unplayed and the week is completed.
+ * @param {string} matchId - The ID of the match.
+ */
+export const refundBetsForMatch = async (matchId) => {
+    console.log(`Refunding bets for match ${matchId}`);
+
+    try {
+        const betsQuery = query(
+            collection(db, 'bets'),
+            where('matchId', '==', matchId),
+            where('status', '==', 'OPEN')
+        );
+        const betsSnapshot = await getDocs(betsQuery);
+
+        if (betsSnapshot.empty) {
+            console.log("No open bets found to refund for match", matchId);
+            return;
+        }
+
+        console.log(`Found ${betsSnapshot.size} bets to refund.`);
+
+        const promises = betsSnapshot.docs.map(async (betDoc) => {
+            const bet = betDoc.data();
+            const betId = betDoc.id;
+
+            await runTransaction(db, async (transaction) => {
+                const userRef = doc(db, 'users', bet.userId);
+                const betRef = doc(db, 'bets', betId);
+
+                const userDoc = await transaction.get(userRef);
+                if (!userDoc.exists()) throw "User not found";
+
+                const currentBalance = userDoc.data().walletBalance || 0;
+                const refundAmount = bet.amount;
+                const newBalance = currentBalance + refundAmount;
+
+                // Refund User
+                transaction.update(userRef, { walletBalance: newBalance });
+
+                // Mark Bet as Refunded
+                transaction.update(betRef, {
+                    status: 'REFUNDED',
+                    resolvedAt: new Date(),
+                    payout: refundAmount,
+                    note: 'Match unplayed'
+                });
+            });
+        });
+
+        await Promise.all(promises);
+        console.log("All bets refunded for match", matchId);
+
+    } catch (error) {
+        console.error("Error refunding bets:", error);
+    }
+};
