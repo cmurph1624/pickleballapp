@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Typography, Box, Button, Paper, Grid, IconButton, List, ListItem, ListItemText } from '@mui/material';
-import { ArrowBack, Refresh, Delete, CheckCircle, Lock } from '@mui/icons-material';
+import { ArrowBack, Refresh, Delete, CheckCircle, Lock, Print } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -12,6 +12,8 @@ import { completeWeek } from '../services/WeekService';
 
 import ScoreModal from '../components/ScoreModal';
 import PlaceBetModal from '../components/PlaceBetModal';
+import MatchFrequencyModal from '../components/MatchFrequencyModal';
+import WeekScorecard from '../components/WeekScorecard';
 
 const WeekDetails = () => {
     const { currentUser } = useAuth();
@@ -30,6 +32,9 @@ const WeekDetails = () => {
     // Betting Modal State
     const [betModalOpen, setBetModalOpen] = useState(false);
     const [selectedBetMatch, setSelectedBetMatch] = useState(null);
+
+    // Frequency Modal State
+    const [frequencyModalOpen, setFrequencyModalOpen] = useState(false);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -175,184 +180,248 @@ const WeekDetails = () => {
     if (loading) return <Typography>Loading...</Typography>;
     if (!week) return <Typography>Week not found</Typography>;
 
+    const printStyles = `
+        @media print {
+            @page {
+                size: landscape;
+                margin: 0.5in;
+            }
+            body { 
+                visibility: hidden; 
+                background-color: white !important;
+                -webkit-print-color-adjust: exact;
+            }
+            #week-content-root {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                visibility: visible;
+            }
+            .screen-only {
+                display: none !important;
+            }
+            .print-only {
+                display: block !important;
+                visibility: visible;
+            }
+        }
+        .print-only {
+            display: none;
+        }
+    `;
+
     return (
-        <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <IconButton onClick={() => navigate(`/clubs/${clubId}/leagues/${leagueId}`)} sx={{ mr: 1 }}>
-                    <ArrowBack />
-                </IconButton>
-                <Typography variant="h4">{week.name}</Typography>
+        <Box id="week-content-root">
+            <style>{printStyles}</style>
+
+            <Box className="print-only">
+                <WeekScorecard weekName={week.name} matches={matches} players={players} />
             </Box>
 
-            <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle1">
-                    Players: {players.length} | Target Rounds: {week.gamesPerPlayer || 'N/A'}
-                </Typography>
-            </Box>
+            <Box className="screen-only">
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <IconButton onClick={() => navigate(`/clubs/${clubId}/leagues/${leagueId}`)} sx={{ mr: 1 }} className="no-print">
+                        <ArrowBack />
+                    </IconButton>
+                    <Typography variant="h4">{week.name}</Typography>
+                </Box>
 
-            {isAdmin && (
-                <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-                    {week.status === 'COMPLETED' ? (
-                        <Button variant="contained" disabled startIcon={<Lock />}>
-                            Week Completed
-                        </Button>
-                    ) : (
-                        <>
-                            <Button
-                                variant="contained"
-                                startIcon={<Refresh />}
-                                onClick={handleGenerateMatches}
-                                disabled={matches.some(m => m.team1Score !== undefined || m.team2Score !== undefined)}
-                            >
-                                Generate Matches
+                <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle1">
+                        Players: {players.length} | Target Rounds: {week.gamesPerPlayer || 'N/A'}
+                    </Typography>
+                </Box>
+
+                {isAdmin && (
+                    <Box sx={{ display: 'flex', gap: 2, mb: 3 }} className="no-print">
+                        {week.status === 'COMPLETED' ? (
+                            <Button variant="contained" disabled startIcon={<Lock />}>
+                                Week Completed
                             </Button>
-                            {matches.length > 0 && (
+                        ) : (
+                            <>
                                 <Button
-                                    variant="outlined"
-                                    color="error"
-                                    startIcon={<Delete />}
-                                    onClick={handleClearMatches}
+                                    variant="contained"
+                                    startIcon={<Refresh />}
+                                    onClick={handleGenerateMatches}
                                     disabled={matches.some(m => m.team1Score !== undefined || m.team2Score !== undefined)}
                                 >
-                                    Clear Matches
+                                    Generate Matches
                                 </Button>
-                            )}
-                            <Button
-                                variant="contained"
-                                color="success"
-                                startIcon={<CheckCircle />}
-                                onClick={handleCompleteWeek}
-                                sx={{ ml: 'auto' }}
-                            >
-                                Complete Week
-                            </Button>
-                        </>
-                    )}
-                </Box>
-            )}
+                                {matches.length > 0 && (
+                                    <Button
+                                        variant="outlined"
+                                        color="error"
+                                        startIcon={<Delete />}
+                                        onClick={handleClearMatches}
+                                        disabled={matches.some(m => m.team1Score !== undefined || m.team2Score !== undefined)}
+                                    >
+                                        Clear Matches
+                                    </Button>
+                                )}
+                                {matches.length > 0 && (
+                                    <Button
+                                        variant="outlined"
+                                        color="info"
+                                        onClick={() => setFrequencyModalOpen(true)}
+                                    >
+                                        Match Analysis
+                                    </Button>
+                                )}
+                                {matches.length > 0 && (
+                                    <Button
+                                        variant="outlined"
+                                        startIcon={<Print />}
+                                        onClick={() => window.print()}
+                                    >
+                                        Print
+                                    </Button>
+                                )}
+                                <Button
+                                    variant="contained"
+                                    color="success"
+                                    startIcon={<CheckCircle />}
+                                    onClick={handleCompleteWeek}
+                                    sx={{ ml: 'auto' }}
+                                >
+                                    Complete Week
+                                </Button>
+                            </>
+                        )}
+                    </Box>
+                )}
 
-            <Typography variant="h5" gutterBottom>Matches ({matches.length})</Typography>
+                <Typography variant="h5" gutterBottom>Matches ({matches.length})</Typography>
 
-            <Box>
-                {(() => {
-                    const matchesPerRound = Math.floor(players.length / 4);
-                    // If matchesPerRound is 0 (e.g. < 4 players), fallback to 1 to show something, though generator shouldn't run.
-                    const chunkSize = matchesPerRound > 0 ? matchesPerRound : 1;
+                <Box>
+                    {(() => {
+                        const matchesPerRound = Math.floor(players.length / 4);
+                        // If matchesPerRound is 0 (e.g. < 4 players), fallback to 1 to show something, though generator shouldn't run.
+                        const chunkSize = matchesPerRound > 0 ? matchesPerRound : 1;
 
-                    const rounds = [];
-                    for (let i = 0; i < matches.length; i += chunkSize) {
-                        rounds.push(matches.slice(i, i + chunkSize));
-                    }
+                        const rounds = [];
+                        for (let i = 0; i < matches.length; i += chunkSize) {
+                            rounds.push(matches.slice(i, i + chunkSize));
+                        }
 
-                    return rounds.map((roundMatches, roundIndex) => (
-                        <Box key={roundIndex} sx={{ mb: 4 }}>
-                            <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', borderBottom: 1, borderColor: 'divider', pb: 1 }}>
-                                Round {roundIndex + 1}
-                            </Typography>
-                            <Grid container spacing={2}>
-                                {roundMatches.map((match, matchIndex) => (
-                                    <Grid item xs={12} md={6} key={match.id || matchIndex}>
-                                        <Paper
-                                            sx={{
-                                                p: 2,
-                                                cursor: 'pointer',
-                                                '&:hover': { bgcolor: 'action.hover' },
-                                                transition: 'background-color 0.2s'
-                                            }}
-                                            onClick={() => {
-                                                if (week.status !== 'COMPLETED') {
-                                                    handleMatchClick(match);
-                                                }
-                                            }}
-                                        >
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                                                <Box>
-                                                    <Typography variant="subtitle2" color="text.secondary">
-                                                        Match {matchIndex + 1}
-                                                    </Typography>
-                                                    {match.spread !== undefined && (
-                                                        <Typography variant="caption" color="primary" sx={{ fontWeight: 'bold' }}>
-                                                            {match.spread === 0 ? "Pick 'em (0)" :
-                                                                match.favoriteTeam === 1 ? `Team 1 (-${match.spread})` :
-                                                                    match.favoriteTeam === 2 ? `Team 2 (-${match.spread})` : ''}
+                        return rounds.map((roundMatches, roundIndex) => (
+                            <Box key={roundIndex} sx={{ mb: 4 }} className="print-break-inside">
+                                <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', borderBottom: 1, borderColor: 'divider', pb: 1 }}>
+                                    Round {roundIndex + 1}
+                                </Typography>
+                                <Grid container spacing={2}>
+                                    {roundMatches.map((match, matchIndex) => (
+                                        <Grid item xs={12} md={6} key={match.id || matchIndex}>
+                                            <Paper
+                                                sx={{
+                                                    p: 2,
+                                                    cursor: 'pointer',
+                                                    '&:hover': { bgcolor: 'action.hover' },
+                                                    transition: 'background-color 0.2s'
+                                                }}
+                                                onClick={() => {
+                                                    if (week.status !== 'COMPLETED') {
+                                                        handleMatchClick(match);
+                                                    }
+                                                }}
+                                            >
+                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                                    <Box>
+                                                        <Typography variant="subtitle2" color="text.secondary">
+                                                            Match {matchIndex + 1}
+                                                        </Typography>
+                                                        {match.spread !== undefined && (
+                                                            <Typography variant="caption" color="primary" sx={{ fontWeight: 'bold' }}>
+                                                                {match.spread === 0 ? "Pick 'em (0)" :
+                                                                    match.favoriteTeam === 1 ? `Team 1 (-${match.spread})` :
+                                                                        match.favoriteTeam === 2 ? `Team 2 (-${match.spread})` : ''}
+                                                            </Typography>
+                                                        )}
+                                                    </Box>
+                                                    {(match.team1Score !== undefined && match.team2Score !== undefined) ? (
+                                                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                                                            Score: {match.team1Score} - {match.team2Score}
+                                                        </Typography>
+                                                    ) : (
+                                                        <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+                                                            Click to score
                                                         </Typography>
                                                     )}
                                                 </Box>
-                                                {(match.team1Score !== undefined && match.team2Score !== undefined) ? (
-                                                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                                                        Score: {match.team1Score} - {match.team2Score}
-                                                    </Typography>
-                                                ) : (
-                                                    <Typography variant="caption" sx={{ color: 'text.disabled' }}>
-                                                        Click to score
-                                                    </Typography>
+
+                                                <Grid container alignItems="center">
+                                                    <Grid item xs={5}>
+                                                        <Box sx={{ textAlign: 'center' }}>
+                                                            <Typography variant="body1" fontWeight="bold">{getPlayerName(match.team1[0])}</Typography>
+                                                            <Typography variant="body1" fontWeight="bold">{getPlayerName(match.team1[1])}</Typography>
+                                                        </Box>
+                                                    </Grid>
+                                                    <Grid item xs={2} sx={{ textAlign: 'center' }}>
+                                                        <Typography variant="h6" color="text.secondary">VS</Typography>
+                                                    </Grid>
+                                                    <Grid item xs={5}>
+                                                        <Box sx={{ textAlign: 'center' }}>
+                                                            <Typography variant="body1" fontWeight="bold">{getPlayerName(match.team2[0])}</Typography>
+                                                            <Typography variant="body1" fontWeight="bold">{getPlayerName(match.team2[1])}</Typography>
+                                                        </Box>
+                                                    </Grid>
+                                                </Grid>
+
+                                                {/* Betting Button */}
+                                                {week.bettingDeadline && new Date() < new Date(week.bettingDeadline) && match.team1Score === undefined && week.status !== 'COMPLETED' && (
+                                                    <Button
+                                                        variant="outlined"
+                                                        size="small"
+                                                        fullWidth
+                                                        sx={{ mt: 2 }}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleBetClick(match);
+                                                        }}
+                                                    >
+                                                        Place Bet
+                                                    </Button>
                                                 )}
-                                            </Box>
+                                            </Paper>
+                                        </Grid>
+                                    ))}
+                                </Grid>
+                            </Box>
+                        ));
+                    })()}
+                </Box>
 
-                                            <Grid container alignItems="center">
-                                                <Grid item xs={5}>
-                                                    <Box sx={{ textAlign: 'center' }}>
-                                                        <Typography variant="body1" fontWeight="bold">{getPlayerName(match.team1[0])}</Typography>
-                                                        <Typography variant="body1" fontWeight="bold">{getPlayerName(match.team1[1])}</Typography>
-                                                    </Box>
-                                                </Grid>
-                                                <Grid item xs={2} sx={{ textAlign: 'center' }}>
-                                                    <Typography variant="h6" color="text.secondary">VS</Typography>
-                                                </Grid>
-                                                <Grid item xs={5}>
-                                                    <Box sx={{ textAlign: 'center' }}>
-                                                        <Typography variant="body1" fontWeight="bold">{getPlayerName(match.team2[0])}</Typography>
-                                                        <Typography variant="body1" fontWeight="bold">{getPlayerName(match.team2[1])}</Typography>
-                                                    </Box>
-                                                </Grid>
-                                            </Grid>
+                {matches.length === 0 && (
+                    <Typography color="text.secondary">No matches generated yet.</Typography>
+                )}
 
-                                            {/* Betting Button */}
-                                            {week.bettingDeadline && new Date() < new Date(week.bettingDeadline) && match.team1Score === undefined && week.status !== 'COMPLETED' && (
-                                                <Button
-                                                    variant="outlined"
-                                                    size="small"
-                                                    fullWidth
-                                                    sx={{ mt: 2 }}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleBetClick(match);
-                                                    }}
-                                                >
-                                                    Place Bet
-                                                </Button>
-                                            )}
-                                        </Paper>
-                                    </Grid>
-                                ))}
-                            </Grid>
-                        </Box>
-                    ));
-                })()}
+                <ScoreModal
+                    open={scoreModalOpen}
+                    onClose={() => setScoreModalOpen(false)}
+                    match={selectedMatch}
+                    onSave={handleSaveScore}
+                    team1Name={selectedMatch ? getTeamNames(selectedMatch).team1 : ''}
+                    team2Name={selectedMatch ? getTeamNames(selectedMatch).team2 : ''}
+                />
+
+                <PlaceBetModal
+                    open={betModalOpen}
+                    onClose={() => setBetModalOpen(false)}
+                    match={selectedBetMatch}
+                    weekId={weekId}
+                    team1Name={selectedBetMatch ? getTeamNames(selectedBetMatch).team1 : ''}
+                    team2Name={selectedBetMatch ? getTeamNames(selectedBetMatch).team2 : ''}
+                    userWallet={currentUser ? (currentUser.walletBalance || 1000) : 0}
+                />
+
+                <MatchFrequencyModal
+                    open={frequencyModalOpen}
+                    onClose={() => setFrequencyModalOpen(false)}
+                    members={players}
+                    matches={matches}
+                />
             </Box>
-
-            {matches.length === 0 && (
-                <Typography color="text.secondary">No matches generated yet.</Typography>
-            )}
-
-            <ScoreModal
-                open={scoreModalOpen}
-                onClose={() => setScoreModalOpen(false)}
-                match={selectedMatch}
-                onSave={handleSaveScore}
-                team1Name={selectedMatch ? getTeamNames(selectedMatch).team1 : ''}
-                team2Name={selectedMatch ? getTeamNames(selectedMatch).team2 : ''}
-            />
-
-            <PlaceBetModal
-                open={betModalOpen}
-                onClose={() => setBetModalOpen(false)}
-                match={selectedBetMatch}
-                weekId={weekId}
-                team1Name={selectedBetMatch ? getTeamNames(selectedBetMatch).team1 : ''}
-                team2Name={selectedBetMatch ? getTeamNames(selectedBetMatch).team2 : ''}
-                userWallet={currentUser ? (currentUser.walletBalance || 1000) : 0}
-            />
         </Box>
     );
 };
