@@ -1,7 +1,7 @@
 export const generateMatches = (players, gamesPerPlayer) => {
     if (!players || players.length < 4) return [];
 
-    const ITERATIONS = 100;
+    const ITERATIONS = 2000;
     let bestMatches = [];
     let bestScore = Infinity;
 
@@ -32,6 +32,7 @@ export const generateMatches = (players, gamesPerPlayer) => {
         });
 
         let totalVariance = 0;
+        let missingOpponentPenalty = 0;
 
         // Calculate variance for partners and opponents
         players.forEach(p => {
@@ -45,9 +46,18 @@ export const generateMatches = (players, gamesPerPlayer) => {
 
             // Heavily penalize repeat partners (more than repeat opponents)
             totalVariance += (partnerSumSq * 10) + opponentSumSq;
+
+            // Check if played against everyone
+            players.forEach(opponent => {
+                if (p.id !== opponent.id) {
+                    if (!stats[p.id].opponents[opponent.id]) {
+                        missingOpponentPenalty += 5000; // Large penalty for not playing someone
+                    }
+                }
+            });
         });
 
-        return totalVariance;
+        return totalVariance + missingOpponentPenalty;
     };
 
     const generateSingleSchedule = () => {
@@ -81,6 +91,17 @@ export const generateMatches = (players, gamesPerPlayer) => {
             score += checkOpponent(p1, p4) * 5;
             score += checkOpponent(p2, p3) * 5;
             score += checkOpponent(p2, p4) * 5;
+
+            // Incentive for playing new opponents
+            // If they haven't played, we WANT this match (negative score)
+            const checkNewOpponent = (player, opp) => {
+                return (playerStats[player.id].opponents[opp.id] || 0) === 0 ? -500 : 0;
+            };
+
+            score += checkNewOpponent(p1, p3);
+            score += checkNewOpponent(p1, p4);
+            score += checkNewOpponent(p2, p3);
+            score += checkNewOpponent(p2, p4);
 
             return score;
         };
