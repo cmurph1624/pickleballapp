@@ -17,7 +17,7 @@ const WeekScorecard = ({ weekName, matches, players }) => {
 
     const getPlayerName = (id) => {
         const p = players.find(player => player.id === id);
-        return p ? `${p.firstName} ${p.lastName}` : 'Unknown';
+        return p ? `${p.firstName} ${p.lastName.substring(0, 1)}` : 'Unknown';
     };
 
     return (

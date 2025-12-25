@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Typography, Box, Button, Paper, Grid, IconButton, List, ListItem, ListItemText } from '@mui/material';
+import { Typography, Box, Button, Paper, Grid, IconButton, List, ListItem, ListItemText, Radio, RadioGroup, FormControlLabel, FormControl, FormLabel, Tooltip } from '@mui/material';
 import { ArrowBack, Refresh, Delete, CheckCircle, Lock, Print } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
@@ -24,6 +24,7 @@ const WeekDetails = () => {
     const [players, setPlayers] = useState([]);
     const [matches, setMatches] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [matchmakingMode, setMatchmakingMode] = useState('STRICT_SOCIAL');
 
     // Score Modal State
     const [scoreModalOpen, setScoreModalOpen] = useState(false);
@@ -73,7 +74,7 @@ const WeekDetails = () => {
         if (!week || !players.length) return;
 
         const gamesPerPlayer = week.gamesPerPlayer || 4; // Default to 4 if not set
-        let newMatches = generateMatches(players, gamesPerPlayer);
+        let newMatches = generateMatches(players, gamesPerPlayer, matchmakingMode);
 
         // Calculate Spreads for each match
         newMatches = newMatches.map(match => {
@@ -167,7 +168,7 @@ const WeekDetails = () => {
 
     const getPlayerName = (id) => {
         const p = players.find(player => player.id === id);
-        return p ? `${p.firstName} ${p.lastName}` : 'Unknown';
+        return p ? `${p.firstName} ${p.lastName.substring(0, 1)}` : 'Unknown';
     };
 
     const getTeamNames = (match) => {
@@ -241,6 +242,22 @@ const WeekDetails = () => {
                             </Button>
                         ) : (
                             <>
+                                <FormControl component="fieldset" sx={{ mr: 2, border: 1, borderColor: 'divider', borderRadius: 1, px: 2, py: 0.5 }}>
+                                    <RadioGroup
+                                        row
+                                        aria-label="matchmaking-mode"
+                                        name="matchmaking-mode"
+                                        value={matchmakingMode}
+                                        onChange={(e) => setMatchmakingMode(e.target.value)}
+                                    >
+                                        <Tooltip title="Prioritize mixing everyone together">
+                                            <FormControlLabel value="STRICT_SOCIAL" control={<Radio size="small" />} label={<Typography variant="body2">Social</Typography>} />
+                                        </Tooltip>
+                                        <Tooltip title="Prioritize balanced games by HiddenRanking">
+                                            <FormControlLabel value="WEIGHTED_COMPETITIVE" control={<Radio size="small" />} label={<Typography variant="body2">Competitive</Typography>} />
+                                        </Tooltip>
+                                    </RadioGroup>
+                                </FormControl>
                                 <Button
                                     variant="contained"
                                     startIcon={<Refresh />}

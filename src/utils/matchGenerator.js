@@ -1,9 +1,63 @@
-export const generateMatches = (players, gamesPerPlayer) => {
+export const generateMatches = (players, gamesPerPlayer, mode = "STRICT_SOCIAL") => {
     if (!players || players.length < 4) return [];
 
     const ITERATIONS = 2000;
     let bestMatches = [];
     let bestScore = Infinity;
+
+    // SCORING CONFIGURATION
+    const SCORING = {
+        STRICT_SOCIAL: {
+            missedOpponent: 5000,
+            missedPartner: 2000,
+            repeatPartner: 500,
+            skillVarianceType: 'linear', // 10 * diff
+            skillVarianceWeight: 10
+        },
+        WEIGHTED_COMPETITIVE: {
+            missedOpponent: 5000,
+            missedPartner: 200,
+            repeatPartner: 10000, // Extreme penalty to effectively ban repeats
+            skillVarianceType: 'squared', // 100 * diff^2
+            skillVarianceWeight: 100
+        }
+    };
+
+    const currentConfig = SCORING[mode] || SCORING.STRICT_SOCIAL;
+
+    // Helper: Calculate Skill Variance Penalty for a match (Team A vs Team B)
+    const getMatchSkillPenalty = (t1p1, t1p2, t2p1, t2p2) => {
+        // Safe access to hiddenRanking, default to 0 if missing
+        const r1 = t1p1.hiddenRanking || 0;
+        const r2 = t1p2.hiddenRanking || 0;
+        const r3 = t2p1.hiddenRanking || 0;
+        const r4 = t2p2.hiddenRanking || 0;
+
+        const rankings = [r1, r2, r3, r4];
+
+        if (currentConfig.skillVarianceType === 'squared') {
+            // Competitive: heavily penalize wide ranges in a single match
+            // Calculate sum of squared differences between all pairs to ensure tightness
+            let sumSqDiff = 0;
+            for (let i = 0; i < 4; i++) {
+                for (let j = i + 1; j < 4; j++) {
+                    const diff = rankings[i] - rankings[j];
+                    sumSqDiff += diff * diff;
+                }
+            }
+            return sumSqDiff * currentConfig.skillVarianceWeight;
+        } else {
+            // Social: Tie-breaker, linear variance
+            // Just sum of absolute differences
+            let sumDiff = 0;
+            for (let i = 0; i < 4; i++) {
+                for (let j = i + 1; j < 4; j++) {
+                    sumDiff += Math.abs(rankings[i] - rankings[j]);
+                }
+            }
+            return sumDiff * currentConfig.skillVarianceWeight;
+        }
+    };
 
     // Helper to calculate the quality of a full schedule (lower is better)
     const evaluateSchedule = (matches, players) => {
@@ -12,52 +66,63 @@ export const generateMatches = (players, gamesPerPlayer) => {
             stats[p.id] = { partners: {}, opponents: {} };
         });
 
+        let totalPenalty = 0;
+        let skillPenalty = 0;
+
         matches.forEach(m => {
-            const t1p1 = m.team1[0], t1p2 = m.team1[1];
-            const t2p1 = m.team2[0], t2p2 = m.team2[1];
+            const p1 = players.find(p => p.id === m.team1[0]);
+            const p2 = players.find(p => p.id === m.team1[1]);
+            const p3 = players.find(p => p.id === m.team2[0]);
+            const p4 = players.find(p => p.id === m.team2[1]);
 
-            // Partners
-            stats[t1p1].partners[t1p2] = (stats[t1p1].partners[t1p2] || 0) + 1;
-            stats[t1p2].partners[t1p1] = (stats[t1p2].partners[t1p1] || 0) + 1;
-            stats[t2p1].partners[t2p2] = (stats[t2p1].partners[t2p2] || 0) + 1;
-            stats[t2p2].partners[t2p1] = (stats[t2p2].partners[t2p1] || 0) + 1;
+            // Track Partners
+            stats[p1.id].partners[p2.id] = (stats[p1.id].partners[p2.id] || 0) + 1;
+            stats[p2.id].partners[p1.id] = (stats[p2.id].partners[p1.id] || 0) + 1;
+            stats[p3.id].partners[p4.id] = (stats[p3.id].partners[p4.id] || 0) + 1;
+            stats[p4.id].partners[p3.id] = (stats[p4.id].partners[p3.id] || 0) + 1;
 
-            // Opponents
-            [t1p1, t1p2].forEach(p1 => {
-                [t2p1, t2p2].forEach(p2 => {
-                    stats[p1].opponents[p2] = (stats[p1].opponents[p2] || 0) + 1;
-                    stats[p2].opponents[p1] = (stats[p2].opponents[p1] || 0) + 1;
+            // Track Opponents
+            [p1, p2].forEach(team1Player => {
+                [p3, p4].forEach(team2Player => {
+                    stats[team1Player.id].opponents[team2Player.id] = (stats[team1Player.id].opponents[team2Player.id] || 0) + 1;
+                    stats[team2Player.id].opponents[team1Player.id] = (stats[team2Player.id].opponents[team1Player.id] || 0) + 1;
                 });
             });
+
+            // Add Skill Penalty for this match
+            skillPenalty += getMatchSkillPenalty(p1, p2, p3, p4);
         });
 
-        let totalVariance = 0;
-        let missingOpponentPenalty = 0;
+        totalPenalty += skillPenalty;
 
-        // Calculate variance for partners and opponents
+        // Calculate Global Penalties
         players.forEach(p => {
-            const partnerCounts = Object.values(stats[p.id].partners);
-            const opponentCounts = Object.values(stats[p.id].opponents);
+            // Missed Partners & Repeat Partners
+            players.forEach(other => {
+                if (p.id === other.id) return;
 
-            // We want these counts to be as flat as possible (mostly 0s and 1s, few 2s)
-            // Sum of squares is a good proxy for "clumpiness"
-            const partnerSumSq = partnerCounts.reduce((sum, val) => sum + (val * val), 0);
-            const opponentSumSq = opponentCounts.reduce((sum, val) => sum + (val * val), 0);
+                const partnerCount = stats[p.id].partners[other.id] || 0;
 
-            // Heavily penalize repeat partners (more than repeat opponents)
-            totalVariance += (partnerSumSq * 10) + opponentSumSq;
+                if (partnerCount === 0) {
+                    // Missed partner (divided by 2 because we count it for both sides, loop handles each player)
+                    // But we want to penalize the SCHEDULE state.
+                    // If A missed B, A gets penalty. B gets penalty. Total = 2 * penalty.
+                    // This aligns with "Score: Calculate a 'Penalty Score' for each schedule".
+                    totalPenalty += currentConfig.missedPartner;
+                } else if (partnerCount > 1) {
+                    // Repeat partner
+                    totalPenalty += (partnerCount - 1) * currentConfig.repeatPartner;
+                }
 
-            // Check if played against everyone
-            players.forEach(opponent => {
-                if (p.id !== opponent.id) {
-                    if (!stats[p.id].opponents[opponent.id]) {
-                        missingOpponentPenalty += 5000; // Large penalty for not playing someone
-                    }
+                const opponentCount = stats[p.id].opponents[other.id] || 0;
+                if (opponentCount === 0) {
+                    // Missed opponent
+                    totalPenalty += currentConfig.missedOpponent;
                 }
             });
         });
 
-        return totalVariance + missingOpponentPenalty;
+        return totalPenalty;
     };
 
     const generateSingleSchedule = () => {
@@ -68,40 +133,38 @@ export const generateMatches = (players, gamesPerPlayer) => {
         players.forEach(p => {
             playerStats[p.id] = {
                 gamesPlayed: 0,
-                partners: {}, // { playerId: count }
-                opponents: {} // { playerId: count }
+                partners: {},
+                opponents: {}
             };
         });
 
         const totalSlots = players.length * gamesPerPlayer;
         const totalMatches = Math.floor(totalSlots / 4);
 
-        // Helper to get score for a potential match (lower is better)
-        const getMatchScore = (p1, p2, p3, p4) => {
+        // Helper to get greedy score for a potential match (lower is better)
+        const getHeuristicScore = (p1, p2, p3, p4) => {
             let score = 0;
 
-            // Penalty for repeat partners (High weight)
-            score += (playerStats[p1.id].partners[p2.id] || 0) * 50;
-            score += (playerStats[p3.id].partners[p4.id] || 0) * 50;
+            // Repetition Heuristics
+            const checkPartner = (a, b) => (playerStats[a.id].partners[b.id] || 0);
 
-            // Penalty for repeat opponents (Increased weight)
+            // Partner Repetition Penalty
+            const repeatPartnerPenalty = mode === "WEIGHTED_COMPETITIVE" ? 10000 : 500;
+            score += checkPartner(p1, p2) * repeatPartnerPenalty;
+            score += checkPartner(p3, p4) * repeatPartnerPenalty;
+
+            // Opponent Repetition Penalty
             const checkOpponent = (player, opp) => (playerStats[player.id].opponents[opp.id] || 0);
+            const repeatOppPenalty = 200;
 
-            score += checkOpponent(p1, p3) * 5;
-            score += checkOpponent(p1, p4) * 5;
-            score += checkOpponent(p2, p3) * 5;
-            score += checkOpponent(p2, p4) * 5;
+            score += checkOpponent(p1, p3) * repeatOppPenalty;
+            score += checkOpponent(p1, p4) * repeatOppPenalty;
+            score += checkOpponent(p2, p3) * repeatOppPenalty;
+            score += checkOpponent(p2, p4) * repeatOppPenalty;
 
-            // Incentive for playing new opponents
-            // If they haven't played, we WANT this match (negative score)
-            const checkNewOpponent = (player, opp) => {
-                return (playerStats[player.id].opponents[opp.id] || 0) === 0 ? -500 : 0;
-            };
-
-            score += checkNewOpponent(p1, p3);
-            score += checkNewOpponent(p1, p4);
-            score += checkNewOpponent(p2, p3);
-            score += checkNewOpponent(p2, p4);
+            // Skill Heuristic
+            const skillCost = getMatchSkillPenalty(p1, p2, p3, p4);
+            score += skillCost;
 
             return score;
         };
@@ -116,13 +179,103 @@ export const generateMatches = (players, gamesPerPlayer) => {
         };
 
         for (let i = 0; i < totalMatches; i++) {
+            // Filter candidates who need games
             let candidates = players.filter(p => playerStats[p.id].gamesPlayed < gamesPerPlayer);
             if (candidates.length < 4) break;
 
-            candidates = shuffle(candidates);
-            candidates.sort((a, b) => playerStats[a.id].gamesPlayed - playerStats[b.id].gamesPlayed);
+            let matchPlayers = [];
 
-            let matchPlayers = candidates.slice(0, 4);
+            if (mode === "WEIGHTED_COMPETITIVE") {
+                // 1. Pick primary candidate (needs games most, random tie-break)
+                candidates = shuffle(candidates);
+                candidates.sort((a, b) => playerStats[a.id].gamesPlayed - playerStats[b.id].gamesPlayed);
+
+                const p1 = candidates[0];
+                const others = candidates.slice(1);
+                const p1Rank = p1.hiddenRanking || 0;
+
+                // Sort others primarily by skill difference to p1
+                others.sort((a, b) => {
+                    const diffA = Math.abs((a.hiddenRanking || 0) - p1Rank);
+                    const diffB = Math.abs((b.hiddenRanking || 0) - p1Rank);
+                    return diffA - diffB;
+                });
+
+                // 2. Greedy Group Builder
+                // Build the group by adding people who have NOT partnered with ANYONE in the current group
+                matchPlayers = [p1];
+
+                for (const candidate of others) {
+                    if (matchPlayers.length >= 4) break;
+
+                    // Check collision with everyone currently in the group
+                    let hasPartneredWithAny = false;
+                    for (const existing of matchPlayers) {
+                        if ((playerStats[existing.id].partners[candidate.id] || 0) > 0) {
+                            hasPartneredWithAny = true;
+                            break;
+                        }
+                    }
+
+                    if (!hasPartneredWithAny) {
+                        matchPlayers.push(candidate);
+                    }
+                }
+
+                // 3. Fallback: If we couldn't find 4 unique strangers, fill with best skill matches
+                // (This handles the edge case where it's mathematically impossible to avoid repeats)
+                if (matchPlayers.length < 4) {
+                    const set = new Set(matchPlayers.map(p => p.id));
+                    for (const candidate of others) {
+                        if (matchPlayers.length >= 4) break;
+                        if (!set.has(candidate.id)) {
+                            matchPlayers.push(candidate);
+                            set.add(candidate.id);
+                        }
+                    }
+                }
+            } else {
+                // Standard Random (Social)
+                // 1. Pick primary candidate
+                candidates = shuffle(candidates);
+                candidates.sort((a, b) => playerStats[a.id].gamesPlayed - playerStats[b.id].gamesPlayed);
+
+                const p1 = candidates[0];
+                const others = candidates.slice(1);
+                // Note: 'others' is already shuffled, which is what we want for Social.
+
+                // 2. Greedy Group Builder
+                matchPlayers = [p1];
+
+                for (const candidate of others) {
+                    if (matchPlayers.length >= 4) break;
+
+                    // Check collision
+                    let hasPartneredWithAny = false;
+                    for (const existing of matchPlayers) {
+                        if ((playerStats[existing.id].partners[candidate.id] || 0) > 0) {
+                            hasPartneredWithAny = true;
+                            break;
+                        }
+                    }
+
+                    if (!hasPartneredWithAny) {
+                        matchPlayers.push(candidate);
+                    }
+                }
+
+                // 3. Fallback
+                if (matchPlayers.length < 4) {
+                    const set = new Set(matchPlayers.map(p => p.id));
+                    for (const candidate of others) {
+                        if (matchPlayers.length >= 4) break;
+                        if (!set.has(candidate.id)) {
+                            matchPlayers.push(candidate);
+                            set.add(candidate.id);
+                        }
+                    }
+                }
+            }
 
             const permutations = [
                 [[matchPlayers[0], matchPlayers[1]], [matchPlayers[2], matchPlayers[3]]],
@@ -135,7 +288,7 @@ export const generateMatches = (players, gamesPerPlayer) => {
 
             permutations.forEach(perm => {
                 const [t1, t2] = perm;
-                const score = getMatchScore(t1[0], t1[1], t2[0], t2[1]);
+                const score = getHeuristicScore(t1[0], t1[1], t2[0], t2[1]);
                 if (score < minScore) {
                     minScore = score;
                     bestMatch = { team1: t1, team2: t2 };
@@ -144,8 +297,10 @@ export const generateMatches = (players, gamesPerPlayer) => {
 
             if (bestMatch) {
                 const { team1, team2 } = bestMatch;
+                const matchId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2);
+
                 matches.push({
-                    id: crypto.randomUUID(),
+                    id: matchId,
                     team1: team1.map(p => p.id),
                     team2: team2.map(p => p.id)
                 });
