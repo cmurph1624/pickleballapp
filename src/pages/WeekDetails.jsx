@@ -6,6 +6,7 @@ import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'fireb
 import { db } from '../firebase';
 import { generateMatches } from '../utils/matchGenerator';
 import { calculateSpread } from '../services/Oddsmaker';
+import { validateSchedule } from '../utils/scheduleValidator';
 import { useAuth } from '../contexts/AuthContext';
 import { useClub } from '../contexts/ClubContext';
 import { completeWeek } from '../services/WeekService';
@@ -85,6 +86,14 @@ const WeekDetails = () => {
         });
 
         setMatches(newMatches);
+
+        // Validation Step
+        const validation = validateSchedule(newMatches, players);
+        if (!validation.isValid) {
+            console.error(validation.error);
+            alert(validation.error);
+            return; // STOP execution, do not save to DB
+        }
 
         // Save to Firestore
         try {

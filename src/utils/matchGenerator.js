@@ -178,10 +178,38 @@ export const generateMatches = (players, gamesPerPlayer, mode = "STRICT_SOCIAL")
             return array;
         };
 
+        let currentRoundMatches = 0;
+        let currentRoundPlayers = new Set();
+        const matchesPerRound = Math.floor(players.length / 4);
+
         for (let i = 0; i < totalMatches; i++) {
-            // Filter candidates who need games
-            let candidates = players.filter(p => playerStats[p.id].gamesPlayed < gamesPerPlayer);
-            if (candidates.length < 4) break;
+            // Check if we are starting a new round
+            if (matchesPerRound > 0 && currentRoundMatches >= matchesPerRound) {
+                currentRoundMatches = 0;
+                currentRoundPlayers.clear();
+            }
+
+            // Filter candidates who need games AND are not in the current round
+            let candidates = players.filter(p =>
+                playerStats[p.id].gamesPlayed < gamesPerPlayer &&
+                !currentRoundPlayers.has(p.id)
+            );
+
+            // If we can't find enough unique players for this round, we might be stuck.
+            // In a greedy approach, this might happen. Strict constraints might need backtracking (simulated annealing),
+            // but for now, let's just break or try to do best effort matching if we are desperate,
+            // though the requirement is STRICT unique. 
+            // If candidates < 4, this iteration fails to fill the round perfectly.
+            // With 2000 iterations, we hope to find one that fits.
+            if (candidates.length < 4) {
+                // Optimization: If we can't fill the round, this schedule is likely bad.
+                // We could potentially break early, but let's let it finish with what it has?
+                // Actually, if we break here, we get a partial schedule.
+                // If we relax the round constraint, we get duplicates.
+                // Let's try to proceed looking for ANY needed candidates if STRICT filtering fails?
+                // No, requirement is to FIX the duplication. So we must stop if no valid candidates.
+                break;
+            }
 
             let matchPlayers = [];
 
@@ -316,6 +344,13 @@ export const generateMatches = (players, gamesPerPlayer, mode = "STRICT_SOCIAL")
                 updateStats(team1[1], team1[0], team2[0], team2[1]);
                 updateStats(team2[0], team2[1], team1[0], team1[1]);
                 updateStats(team2[1], team2[0], team1[0], team1[1]);
+
+                // Track players for this round
+                currentRoundPlayers.add(team1[0].id);
+                currentRoundPlayers.add(team1[1].id);
+                currentRoundPlayers.add(team2[0].id);
+                currentRoundPlayers.add(team2[1].id);
+                currentRoundMatches++;
             }
         }
         return matches;
