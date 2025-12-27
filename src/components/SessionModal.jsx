@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Box, FormControlLabel, Checkbox, Typography } from '@mui/material';
 import { collection, addDoc, doc, updateDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 
@@ -103,33 +102,62 @@ const SessionModal = ({ open, onClose, session, league }) => {
         }
     };
 
-    return (
-        <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-            <DialogTitle>{session ? 'Edit Session' : 'Add Session'}</DialogTitle>
-            <form onSubmit={handleSubmit}>
-                <DialogContent>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <TextField
-                            label="Session Name"
-                            name="name"
-                            value={formData.name}
-                            onChange={handleChange}
-                            required
-                            fullWidth
-                            placeholder="e.g. Session 1"
-                        />
+    if (!open) return null;
 
-                        <TextField
-                            label="Number of Rounds"
-                            name="gamesPerPlayer"
-                            type="number"
-                            value={formData.gamesPerPlayer}
-                            onChange={handleChange}
-                            fullWidth
-                            inputProps={{ min: 0 }}
-                            placeholder="e.g. 4"
-                            helperText={
-                                formData.players.length < 4
+    return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+            <div
+                className="bg-surface-light dark:bg-surface-dark w-full max-w-2xl rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col max-h-[90vh]"
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Header */}
+                <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-surface-light dark:bg-surface-dark">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                        {session ? 'Edit Session' : 'Add Session'}
+                    </h2>
+                    <button
+                        onClick={onClose}
+                        className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 transition-colors"
+                    >
+                        <span className="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+
+                {/* Content */}
+                <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                        {/* Session Name */}
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Session Name <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                type="text"
+                                name="name"
+                                required
+                                value={formData.name}
+                                onChange={handleChange}
+                                placeholder="e.g. Session 1"
+                                className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-surface-light dark:bg-gray-900/50 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                            />
+                        </div>
+
+                        {/* Number of Rounds */}
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Number of Rounds
+                            </label>
+                            <input
+                                type="number"
+                                name="gamesPerPlayer"
+                                min="0"
+                                value={formData.gamesPerPlayer}
+                                onChange={handleChange}
+                                placeholder="e.g. 4"
+                                className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-surface-light dark:bg-gray-900/50 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                            />
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {formData.players.length < 4
                                     ? "Select at least 4 players"
                                     : formData.players.length === 4
                                         ? "Recommended: 3 rounds (Round Robin)"
@@ -138,63 +166,104 @@ const SessionModal = ({ open, onClose, session, league }) => {
                                             : formData.players.length < 9
                                                 ? `Recommended: ${formData.players.length % 2 === 0 ? formData.players.length - 1 : formData.players.length} rounds for full rotation`
                                                 : "Recommended: 4-6 rounds for a typical session"
-                            }
-                        />
+                                }
+                            </p>
+                        </div>
 
-                        <TextField
-                            label="Betting Deadline"
-                            name="bettingDeadline"
-                            type="datetime-local"
-                            value={formData.bettingDeadline}
-                            onChange={handleChange}
-                            fullWidth
-                            InputLabelProps={{ shrink: true }}
-                            helperText="Bets will be locked after this time"
-                        />
+                        {/* Dates Row */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Betting Deadline
+                                </label>
+                                <input
+                                    type="datetime-local"
+                                    name="bettingDeadline"
+                                    value={formData.bettingDeadline}
+                                    onChange={handleChange}
+                                    className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-surface-light dark:bg-gray-900/50 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all [color-scheme:light] dark:[color-scheme:dark]"
+                                />
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    Bets will be locked after this time
+                                </p>
+                            </div>
 
-                        <TextField
-                            label="Scheduled Date"
-                            name="scheduledDate"
-                            type="datetime-local"
-                            value={formData.scheduledDate}
-                            onChange={handleChange}
-                            fullWidth
-                            InputLabelProps={{ shrink: true }}
-                            helperText="When this session's games are played"
-                        />
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Scheduled Date
+                                </label>
+                                <input
+                                    type="datetime-local"
+                                    name="scheduledDate"
+                                    value={formData.scheduledDate}
+                                    onChange={handleChange}
+                                    className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-surface-light dark:bg-gray-900/50 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all [color-scheme:light] dark:[color-scheme:dark]"
+                                />
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    When this session's games are played
+                                </p>
+                            </div>
+                        </div>
 
-                        <Box>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                                <Typography variant="subtitle1">Select Players</Typography>
-                                <Typography variant="body2" color="text.secondary">
+                        {/* Player Selection */}
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Select Players
+                                </label>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
                                     {formData.players.length} of {leaguePlayers.length} selected
-                                </Typography>
-                            </Box>
-                            <Box sx={{ maxHeight: 200, overflowY: 'auto', border: '1px solid #ddd', borderRadius: 1, p: 1 }}>
-                                {leaguePlayers.map(player => (
-                                    <FormControlLabel
-                                        key={player.id}
-                                        control={
-                                            <Checkbox
-                                                checked={formData.players.includes(player.id)}
-                                                onChange={() => handlePlayerToggle(player.id)}
-                                            />
-                                        }
-                                        label={`${player.firstName} ${player.lastName}`}
-                                        sx={{ display: 'block', m: 0 }}
-                                    />
-                                ))}
-                                {leaguePlayers.length === 0 && <Typography color="text.secondary">No players in this league.</Typography>}
-                            </Box>
-                        </Box>
-                    </Box>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={onClose} color="inherit">Cancel</Button>
-                    <Button type="submit" variant="contained">Save</Button>
-                </DialogActions>
-            </form>
-        </Dialog>
+                                </span>
+                            </div>
+
+                            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-800/50 max-h-[200px] overflow-y-auto">
+                                {leaguePlayers.length === 0 ? (
+                                    <div className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">
+                                        No players in this league.
+                                    </div>
+                                ) : (
+                                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                                        {leaguePlayers.map(player => (
+                                            <label
+                                                key={player.id}
+                                                className="flex items-center gap-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700/50 cursor-pointer transition-colors"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={formData.players.includes(player.id)}
+                                                    onChange={() => handlePlayerToggle(player.id)}
+                                                    className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                                />
+                                                <span className="text-sm text-gray-700 dark:text-gray-200">
+                                                    {player.firstName} {player.lastName}
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="p-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-gray-800/50">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-dark rounded-lg shadow-sm shadow-primary/20 transition-all transform active:scale-95"
+                        >
+                            Save Session
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     );
 };
 
