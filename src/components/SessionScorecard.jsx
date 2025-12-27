@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Box, Typography } from '@mui/material';
 
-const SessionScorecard = ({ sessionName, matches, players }) => {
+const SessionScorecard = ({ sessionName, matches, players, courts }) => {
 
     // Group matches into rounds
     const rounds = useMemo(() => {
@@ -32,9 +32,11 @@ const SessionScorecard = ({ sessionName, matches, players }) => {
                     <tr>
                         <th style={{ width: '60px', border: '1px solid black', padding: '4px', background: '#e0e0e0' }}>Round</th>
                         {/* Assuming max 3 matches per round for the column headers, or just generic header */}
-                        <th style={{ border: '1px solid black', padding: '4px', background: '#e0e0e0' }}>Match 1</th>
-                        <th style={{ border: '1px solid black', padding: '4px', background: '#e0e0e0' }}>Match 2</th>
-                        <th style={{ border: '1px solid black', padding: '4px', background: '#e0e0e0' }}>Match 3</th>
+                        {[0, 1, 2].map(i => {
+                            const raw = courts && courts[i] ? courts[i] : `Match ${i + 1}`;
+                            const display = /^\d+$/.test(raw) ? `Court ${raw}` : raw;
+                            return <th key={i} style={{ border: '1px solid black', padding: '4px', background: '#e0e0e0' }}>{display}</th>;
+                        })}
                     </tr>
                 </thead>
                 <tbody>

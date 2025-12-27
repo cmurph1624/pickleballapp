@@ -229,7 +229,7 @@ const SessionDetails = () => {
             <style>{printStyles}</style>
 
             <div className="print-only">
-                <SessionScorecard sessionName={session.name} matches={matches} players={players} />
+                <SessionScorecard sessionName={session.name} matches={matches} players={players} courts={session.courts || []} />
             </div>
 
             <div className="screen-only">
@@ -367,7 +367,11 @@ const SessionDetails = () => {
                                             <div className="flex justify-between items-start mb-3">
                                                 <div>
                                                     <span className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wide">
-                                                        Match {matchIndex + 1}
+                                                        {(() => {
+                                                            const rawName = session.courts && session.courts[matchIndex] ? session.courts[matchIndex] : `Match ${matchIndex + 1}`;
+                                                            // If it's just a number (e.g. "1"), display as "Court 1"
+                                                            return /^\d+$/.test(rawName) ? `Court ${rawName}` : rawName;
+                                                        })()}
                                                     </span>
                                                     {match.spread !== undefined && (
                                                         <span className="block text-xs font-bold text-primary mt-0.5">

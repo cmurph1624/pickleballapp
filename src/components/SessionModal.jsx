@@ -8,7 +8,9 @@ const SessionModal = ({ open, onClose, session, league }) => {
         players: [],
         gamesPerPlayer: '',
         bettingDeadline: '',
-        scheduledDate: ''
+        scheduledDate: '',
+        courtCount: '',
+        courtNames: ''
     });
     const [leaguePlayers, setLeaguePlayers] = useState([]);
 
@@ -45,7 +47,9 @@ const SessionModal = ({ open, onClose, session, league }) => {
                 players: session.players || [],
                 gamesPerPlayer: session.gamesPerPlayer || '',
                 bettingDeadline: session.bettingDeadline || '',
-                scheduledDate: session.scheduledDate || ''
+                scheduledDate: session.scheduledDate || '',
+                courtCount: session.courts ? session.courts.length : '',
+                courtNames: session.courts ? session.courts.join(', ') : ''
             });
         } else {
             setFormData({
@@ -53,7 +57,9 @@ const SessionModal = ({ open, onClose, session, league }) => {
                 players: [],
                 gamesPerPlayer: '',
                 bettingDeadline: '',
-                scheduledDate: ''
+                scheduledDate: '',
+                courtCount: '',
+                courtNames: ''
             });
         }
     }, [session, open]);
@@ -77,6 +83,27 @@ const SessionModal = ({ open, onClose, session, league }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
+        // Generate courts array
+        let courts = [];
+        const count = parseInt(formData.courtCount) || 0;
+
+        if (count > 0) {
+            // Parse provided names
+            const providedNames = formData.courtNames
+                ? formData.courtNames.split(',').map(s => s.trim()).filter(s => s !== '')
+                : [];
+
+            // Fill array
+            for (let i = 0; i < count; i++) {
+                if (i < providedNames.length) {
+                    courts.push(providedNames[i]);
+                } else {
+                    // Default naming: Court 1, Court 2...
+                    courts.push(`Court ${i + 1}`);
+                }
+            }
+        }
+
         const data = {
             leagueId: league.id,
             name: formData.name,
@@ -84,6 +111,7 @@ const SessionModal = ({ open, onClose, session, league }) => {
             gamesPerPlayer: parseInt(formData.gamesPerPlayer) || 0,
             bettingDeadline: formData.bettingDeadline,
             scheduledDate: formData.scheduledDate,
+            courts: courts,
             updatedAt: new Date()
         };
 
@@ -140,6 +168,37 @@ const SessionModal = ({ open, onClose, session, league }) => {
                                 placeholder="e.g. Session 1"
                                 className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-surface-light dark:bg-gray-900/50 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
                             />
+                        </div>
+
+                        {/* Court Details */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Number of Courts
+                                </label>
+                                <input
+                                    type="number"
+                                    name="courtCount"
+                                    min="0"
+                                    value={formData.courtCount}
+                                    onChange={handleChange}
+                                    placeholder="e.g. 3"
+                                    className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-surface-light dark:bg-gray-900/50 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                                />
+                            </div>
+                            <div className="space-y-2 md:col-span-2">
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Court Names <span className="text-xs text-gray-500 font-normal">(Optional, comma separated)</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    name="courtNames"
+                                    value={formData.courtNames}
+                                    onChange={handleChange}
+                                    placeholder="e.g. Center, East, West (Defaults to 1, 2, 3...)"
+                                    className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-surface-light dark:bg-gray-900/50 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                                />
+                            </div>
                         </div>
 
                         {/* Number of Rounds */}
