@@ -9,7 +9,7 @@ import DashboardLayout from './components/DashboardLayout';
 import Leagues from './pages/Leagues';
 import Players from './pages/Players';
 import LeagueDetails from './pages/LeagueDetails';
-import WeekDetails from './pages/WeekDetails';
+import SessionDetails from './pages/SessionDetails';
 import HighRollers from './pages/HighRollers';
 import Calendar from './pages/Calendar';
 import Chat from './pages/Chat';
@@ -18,7 +18,7 @@ import JoinClub from './pages/JoinClub';
 import ClubInvite from './pages/ClubInvite';
 import { ClubProvider } from './contexts/ClubContext';
 import { Outlet } from 'react-router-dom';
-import ClubDashboard from './pages/ClubDashboard'; // Needed for redirect logic if fallback used, though HomeRedirect handles it. Kept for safety.
+import ClubDashboard from './pages/ClubDashboard';
 
 function App() {
   return (
@@ -45,7 +45,7 @@ function App() {
               <Route path="calendar" element={<Calendar />} />
               <Route path="chat" element={<Chat />} />
               <Route path="leagues/:id" element={<LeagueDetails />} />
-              <Route path="leagues/:leagueId/weeks/:weekId" element={<WeekDetails />} />
+              <Route path="leagues/:leagueId/sessions/:sessionId" element={<SessionDetails />} />
               <Route path="invite" element={<ClubInvite />} />
             </Route>
           </Routes>

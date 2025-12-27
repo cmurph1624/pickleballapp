@@ -7,19 +7,19 @@ import { calculateSpread } from '../services/Oddsmaker';
 import { validateSchedule } from '../utils/scheduleValidator';
 import { useAuth } from '../contexts/AuthContext';
 import { useClub } from '../contexts/ClubContext';
-import { completeWeek } from '../services/WeekService';
+import { completeSession } from '../services/SessionService';
 
 import ScoreModal from '../components/ScoreModal';
 import PlaceBetModal from '../components/PlaceBetModal';
 import MatchFrequencyModal from '../components/MatchFrequencyModal';
-import WeekScorecard from '../components/WeekScorecard';
+import SessionScorecard from '../components/SessionScorecard';
 
-const WeekDetails = () => {
+const SessionDetails = () => {
     const { currentUser } = useAuth();
     const { isAdmin, clubId } = useClub();
-    const { leagueId, weekId } = useParams();
+    const { leagueId, sessionId } = useParams();
     const navigate = useNavigate();
-    const [week, setWeek] = useState(null);
+    const [session, setSession] = useState(null);
     const [players, setPlayers] = useState([]);
     const [matches, setMatches] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -39,23 +39,23 @@ const WeekDetails = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // Fetch Week
-                const weekDoc = await getDoc(doc(db, 'weeks', weekId));
-                if (!weekDoc.exists()) {
+                // Fetch Session
+                const sessionDoc = await getDoc(doc(db, 'sessions', sessionId));
+                if (!sessionDoc.exists()) {
                     navigate('/');
                     return;
                 }
-                const weekData = { id: weekDoc.id, ...weekDoc.data() };
-                setWeek(weekData);
-                setMatches(weekData.matches || []);
+                const sessionData = { id: sessionDoc.id, ...sessionDoc.data() };
+                setSession(sessionData);
+                setMatches(sessionData.matches || []);
 
                 // Fetch Players
-                if (weekData.players && weekData.players.length > 0) {
+                if (sessionData.players && sessionData.players.length > 0) {
                     const playersQuery = query(collection(db, 'players'));
                     const playersSnap = await getDocs(playersQuery);
                     const allPlayers = playersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    const weekPlayers = allPlayers.filter(p => weekData.players.includes(p.id));
-                    setPlayers(weekPlayers);
+                    const sessionPlayers = allPlayers.filter(p => sessionData.players.includes(p.id));
+                    setPlayers(sessionPlayers);
                 }
             } catch (error) {
                 console.error("Error fetching data:", error);
@@ -64,12 +64,12 @@ const WeekDetails = () => {
             }
         };
         fetchData();
-    }, [weekId, navigate]);
+    }, [sessionId, navigate]);
 
     const handleGenerateMatches = async () => {
-        if (!week || !players.length) return;
+        if (!session || !players.length) return;
 
-        const gamesPerPlayer = week.gamesPerPlayer || 4;
+        const gamesPerPlayer = session.gamesPerPlayer || 4;
         let newMatches = generateMatches(players, gamesPerPlayer, matchmakingMode);
 
         // Calculate Spreads for each match
@@ -92,7 +92,7 @@ const WeekDetails = () => {
 
         // Save to Firestore
         try {
-            await updateDoc(doc(db, 'weeks', weekId), {
+            await updateDoc(doc(db, 'sessions', sessionId), {
                 matches: newMatches
             });
         } catch (error) {
@@ -105,7 +105,7 @@ const WeekDetails = () => {
         if (window.confirm("Are you sure you want to clear all matches?")) {
             setMatches([]);
             try {
-                await updateDoc(doc(db, 'weeks', weekId), {
+                await updateDoc(doc(db, 'sessions', sessionId), {
                     matches: []
                 });
             } catch (error) {
@@ -134,7 +134,7 @@ const WeekDetails = () => {
         setMatches(updatedMatches);
 
         try {
-            await updateDoc(doc(db, 'weeks', weekId), {
+            await updateDoc(doc(db, 'sessions', sessionId), {
                 matches: updatedMatches
             });
         } catch (error) {
@@ -143,24 +143,24 @@ const WeekDetails = () => {
         }
     };
 
-    const handleCompleteWeek = async () => {
-        if (!window.confirm("Are you sure you want to COMPLETE this week? This will update player ratings, resolve bets (and refund unplayed ones), and lock the week.")) {
+    const handleCompleteSession = async () => {
+        if (!window.confirm("Are you sure you want to COMPLETE this session? This will update player ratings, resolve bets (and refund unplayed ones), and lock the session.")) {
             return;
         }
 
         try {
             setLoading(true);
-            const updatedPlayers = await completeWeek(weekId);
+            const updatedPlayers = await completeSession(sessionId);
 
-            setWeek(prev => ({ ...prev, status: 'COMPLETED' }));
+            setSession(prev => ({ ...prev, status: 'COMPLETED' }));
             if (updatedPlayers) {
                 setPlayers(updatedPlayers);
             }
-            alert("Week completed successfully!");
+            alert("Session completed successfully!");
 
         } catch (error) {
-            console.error("Error completing week:", error);
-            alert("Error completing week: " + error.message);
+            console.error("Error completing session:", error);
+            alert("Error completing session: " + error.message);
         } finally {
             setLoading(false);
         }
@@ -184,7 +184,7 @@ const WeekDetails = () => {
         </div>
     );
 
-    if (!week) return <div className="p-4 text-center">Week not found</div>;
+    if (!session) return <div className="p-4 text-center">Session not found</div>;
 
     const printStyles = `
         @media print {
@@ -197,7 +197,7 @@ const WeekDetails = () => {
                 background-color: white !important;
                 -webkit-print-color-adjust: exact;
             }
-            #week-content-root {
+            #session-content-root {
                 position: absolute;
                 left: 0;
                 top: 0;
@@ -225,11 +225,11 @@ const WeekDetails = () => {
     `;
 
     return (
-        <div id="week-content-root" className="w-full">
+        <div id="session-content-root" className="w-full">
             <style>{printStyles}</style>
 
             <div className="print-only">
-                <WeekScorecard weekName={week.name} matches={matches} players={players} />
+                <SessionScorecard sessionName={session.name} matches={matches} players={players} />
             </div>
 
             <div className="screen-only">
@@ -244,10 +244,10 @@ const WeekDetails = () => {
                         </button>
                         <div>
                             <h1 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                                {week.name}
+                                {session.name}
                             </h1>
                             <p className="text-sm text-gray-500 dark:text-gray-400">
-                                Players: {players.length} | Target Rounds: {week.gamesPerPlayer || 'N/A'}
+                                Players: {players.length} | Target Rounds: {session.gamesPerPlayer || 'N/A'}
                             </p>
                         </div>
                     </div>
@@ -256,10 +256,10 @@ const WeekDetails = () => {
                 {/* Control Bar */}
                 {isAdmin && (
                     <div className="bg-surface-light dark:bg-surface-dark p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mb-6 flex flex-col xl:flex-row xl:items-center justify-between gap-4 no-print">
-                        {week.status === 'COMPLETED' ? (
+                        {session.status === 'COMPLETED' ? (
                             <div className="flex items-center gap-2 text-green-600 dark:text-green-400 font-bold bg-green-100 dark:bg-green-900/30 px-4 py-2 rounded-lg">
                                 <span className="material-symbols-outlined">lock</span>
-                                Week Completed
+                                Session Completed
                             </div>
                         ) : (
                             <>
@@ -323,11 +323,11 @@ const WeekDetails = () => {
                                         </>
                                     )}
                                     <button
-                                        onClick={handleCompleteWeek}
+                                        onClick={handleCompleteSession}
                                         className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1 transition-colors shadow-sm ml-auto sm:ml-0"
                                     >
                                         <span className="material-symbols-outlined text-lg">check_circle</span>
-                                        Complete Week
+                                        Complete Session
                                     </button>
                                 </div>
                             </>
@@ -357,7 +357,7 @@ const WeekDetails = () => {
                                         <div
                                             key={match.id || matchIndex}
                                             onClick={() => {
-                                                if (week.status !== 'COMPLETED') {
+                                                if (session.status !== 'COMPLETED') {
                                                     handleMatchClick(match);
                                                 }
                                             }}
@@ -419,7 +419,7 @@ const WeekDetails = () => {
                                             </div>
 
                                             {/* Betting Button */}
-                                            {week.bettingDeadline && new Date() < new Date(week.bettingDeadline) && match.team1Score === undefined && week.status !== 'COMPLETED' && (
+                                            {session.bettingDeadline && new Date() < new Date(session.bettingDeadline) && match.team1Score === undefined && session.status !== 'COMPLETED' && (
                                                 <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 flex justify-center">
                                                     <button
                                                         onClick={(e) => {
@@ -462,7 +462,7 @@ const WeekDetails = () => {
                     open={betModalOpen}
                     onClose={() => setBetModalOpen(false)}
                     match={selectedBetMatch}
-                    weekId={weekId}
+                    weekId={sessionId}
                     team1Name={selectedBetMatch ? getTeamNames(selectedBetMatch).team1 : ''}
                     team2Name={selectedBetMatch ? getTeamNames(selectedBetMatch).team2 : ''}
                     userWallet={currentUser ? (currentUser.walletBalance || 1000) : 0}
@@ -479,4 +479,4 @@ const WeekDetails = () => {
     );
 };
 
-export default WeekDetails;
+export default SessionDetails;

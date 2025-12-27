@@ -4,51 +4,42 @@ import { updateRatings } from './RatingEngine';
 import { resolveBetsForMatch, refundBetsForMatch } from './BettingService';
 
 /**
- * Completes a week by:
+ * Completes a session by:
  * 1. Calculating and updating player ratings based on scored matches.
  * 2. Resolving bets for scored matches (Win/Loss).
  * 3. Refunding bets for unplayed matches.
- * 4. Marking the week as COMPLETED.
+ * 4. Marking the session as COMPLETED.
  * 
- * @param {string} weekId - ID of the week to complete.
+ * @param {string} sessionId - ID of the session to complete.
  * @returns {Promise<void>}
  */
-export const completeWeek = async (weekId) => {
-    console.log(`Starting completion for week ${weekId}`);
+export const completeSession = async (sessionId) => {
+    console.log(`Starting completion for session ${sessionId}`);
 
     try {
-        // 1. Fetch Week Data
-        const weekDoc = await getDoc(doc(db, 'weeks', weekId));
-        if (!weekDoc.exists()) throw new Error("Week not found");
-        const week = { id: weekDoc.id, ...weekDoc.data() };
-        const matches = week.matches || [];
+        // 1. Fetch Session Data
+        const sessionDoc = await getDoc(doc(db, 'sessions', sessionId));
+        if (!sessionDoc.exists()) throw new Error("Session not found");
+        const session = { id: sessionDoc.id, ...sessionDoc.data() };
+        const matches = session.matches || [];
 
-        if (week.status === 'COMPLETED') {
-            console.warn("Week already completed.");
+        if (session.status === 'COMPLETED') {
+            console.warn("Session already completed.");
             return;
         }
 
         // 2. Fetch Players Involved
-        // We need all players to update their ratings correctly.
-        // Similar to WeekDetails, we fetch all players for simplicity or filter if possible.
-        // Optimization: Fetch only ID's needed.
         const playerIds = new Set();
         matches.forEach(m => {
             m.team1.forEach(id => playerIds.add(id));
             m.team2.forEach(id => playerIds.add(id));
         });
 
-        // Batch fetching players might be cleaner if we had a helper, 
-        // but for now let's query all players and filter, matching existing pattern for consistency
-        // or query 'where documentId in [...]' chunks.
-        // Let's stick to the pattern used in WeekDetails for safety: fetch 'all' players collection if small, or query.
-        // Given complexity, let's just fetch all players (assuming < 100s for now).
         const playersSnap = await getDocs(collection(db, 'players'));
         let currentPlayers = playersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
         // Filter to only involved players
         currentPlayers = currentPlayers.filter(p => playerIds.has(p.id));
-
 
         // 3. Process Matches (Ratings & Bets)
         const scoredMatches = matches.filter(m => m.team1Score !== undefined && m.team2Score !== undefined);
@@ -76,7 +67,6 @@ export const completeWeek = async (weekId) => {
         await Promise.all(ratingUpdates);
         console.log("Updated ratings for players.");
 
-
         // 4. Resolve Bets (Scored -> Resolve, Unplayed -> Refund)
         const resolvePromises = scoredMatches.map(m =>
             resolveBetsForMatch(m.id, m.team1Score, m.team2Score, m)
@@ -88,17 +78,16 @@ export const completeWeek = async (weekId) => {
         await Promise.all([...resolvePromises, ...refundPromises]);
         console.log("Resolved and refunded bets.");
 
-
-        // 5. Mark Week as Completed
-        await updateDoc(doc(db, 'weeks', weekId), {
+        // 5. Mark Session as Completed
+        await updateDoc(doc(db, 'sessions', sessionId), {
             status: 'COMPLETED'
         });
 
-        console.log("Week completed successfully.");
+        console.log("Session completed successfully.");
         return currentPlayers; // Return updated players if needed by UI
 
     } catch (error) {
-        console.error("Error in completeWeek service:", error);
+        console.error("Error in completeSession service:", error);
         throw error;
     }
 };

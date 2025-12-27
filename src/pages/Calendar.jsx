@@ -22,30 +22,32 @@ const localizer = dateFnsLocalizer({
     locales,
 });
 
+import { useClub } from '../contexts/ClubContext';
+
 const Calendar = () => {
     const [events, setEvents] = useState([]);
     const [date, setDate] = useState(new Date());
     const [view, setView] = useState('month');
     const navigate = useNavigate();
+    const { clubId } = useClub();
 
     useEffect(() => {
-        const q = query(collection(db, 'weeks'));
+        const q = query(collection(db, 'sessions'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const weeks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            const calendarEvents = weeks
-                .filter(week => week.scheduledDate) // Only show weeks with a date
-                .map(week => {
-                    const startDate = new Date(week.scheduledDate);
-                    // Default duration 2 hours if not specified, or just end at same time
+            const calendarEvents = sessions
+                .filter(session => session.scheduledDate)
+                .map(session => {
+                    const startDate = new Date(session.scheduledDate);
                     const endDate = new Date(startDate.getTime() + (2 * 60 * 60 * 1000));
 
                     return {
-                        id: week.id,
-                        title: week.name,
+                        id: session.id,
+                        title: session.name,
                         start: startDate,
                         end: endDate,
-                        resource: week
+                        resource: session
                     };
                 });
 
@@ -56,8 +58,10 @@ const Calendar = () => {
     }, []);
 
     const handleSelectEvent = (event) => {
-        const week = event.resource;
-        navigate(`/leagues/${week.leagueId}/weeks/${week.id}`);
+        const session = event.resource;
+        if (clubId && session.leagueId) {
+            navigate(`/clubs/${clubId}/leagues/${session.leagueId}/sessions/${session.id}`);
+        }
     };
 
     const onNavigate = (newDate) => {
@@ -70,7 +74,6 @@ const Calendar = () => {
 
     return (
         <div className="w-full flex flex-col h-[calc(100vh-120px)]">
-            {/* Custom Styles for Dark Mode Overrides */}
             <style>{`
                 /* Toolbar */
                 .rbc-toolbar {

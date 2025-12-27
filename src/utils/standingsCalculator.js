@@ -1,5 +1,5 @@
-export const calculateStandings = (players, weeks) => {
-    if (!players || !weeks) return [];
+export const calculateStandings = (players, sessions) => {
+    if (!players || !sessions) return [];
 
     // 1. Initialize Stats
     const stats = {};
@@ -18,10 +18,10 @@ export const calculateStandings = (players, weeks) => {
     });
 
     // 2. Process Matches
-    weeks.forEach(week => {
-        if (!week.matches) return;
+    sessions.forEach(session => {
+        if (!session.matches) return;
 
-        week.matches.forEach(match => {
+        session.matches.forEach(match => {
             // Skip if score is missing
             if (match.team1Score === undefined || match.team2Score === undefined) return;
 

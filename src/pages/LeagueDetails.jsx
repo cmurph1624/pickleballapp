@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, doc, deleteDoc, getDoc } from 'firebase/firestore';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import WeekModal from '../components/WeekModal';
+import SessionModal from '../components/SessionModal';
 import LeagueModal from '../components/LeagueModal';
 import { calculateStandings } from '../utils/standingsCalculator';
 import { useAuth } from '../contexts/AuthContext';
@@ -14,18 +14,18 @@ const LeagueDetails = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const [league, setLeague] = useState(null);
-    const [weeks, setWeeks] = useState([]);
+    const [sessions, setSessions] = useState([]);
     const [players, setPlayers] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [weekModalOpen, setWeekModalOpen] = useState(false);
+    const [sessionModalOpen, setSessionModalOpen] = useState(false);
     const [leagueModalOpen, setLeagueModalOpen] = useState(false);
-    const [selectedWeek, setSelectedWeek] = useState(null);
+    const [selectedSession, setSelectedSession] = useState(null);
 
     // Tab State
     const [currentTab, setCurrentTab] = useState(0);
     const [standings, setStandings] = useState([]);
 
-    // If Open Play, default to Weeks tab (1)
+    // If Open Play, default to Sessions tab (1)
     useEffect(() => {
         if (league && league.type === 'Open Play') {
             setCurrentTab(1);
@@ -53,18 +53,18 @@ const LeagueDetails = () => {
         fetchLeague();
     }, [id, navigate]);
 
-    // Fetch Weeks and Calculate Standings
+    // Fetch Sessions and Calculate Standings
     useEffect(() => {
-        const q = query(collection(db, 'weeks'), where('leagueId', '==', id));
+        const q = query(collection(db, 'sessions'), where('leagueId', '==', id));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const weeksData = snapshot.docs.map(doc => ({
+            const sessionsData = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             }));
-            // Sort weeks by name or creation date if possible. 
+            // Sort sessions by name or creation date if possible. 
             // For now, simple sort.
-            weeksData.sort((a, b) => a.name.localeCompare(b.name));
-            setWeeks(weeksData);
+            sessionsData.sort((a, b) => a.name.localeCompare(b.name));
+            setSessions(sessionsData);
         });
 
         return () => unsubscribe();
@@ -85,38 +85,38 @@ const LeagueDetails = () => {
         return () => unsubscribe();
     }, [league]);
 
-    // Recalculate Standings whenever Weeks or Players change
+    // Recalculate Standings whenever Sessions or Players change
     useEffect(() => {
         if (league && league.type === 'Open Play') {
             setStandings([]);
             return;
         }
-        if (players.length > 0 && weeks.length > 0) {
-            const newStandings = calculateStandings(players, weeks);
+        if (players.length > 0 && sessions.length > 0) {
+            const newStandings = calculateStandings(players, sessions);
             setStandings(newStandings);
         }
-    }, [players, weeks, league]);
+    }, [players, sessions, league]);
 
-    const handleDelete = async (e, week) => {
+    const handleDelete = async (e, session) => {
         e.stopPropagation();
-        if (window.confirm(`Are you sure you want to delete ${week.name}?`)) {
+        if (window.confirm(`Are you sure you want to delete ${session.name}?`)) {
             try {
-                await deleteDoc(doc(db, 'weeks', week.id));
+                await deleteDoc(doc(db, 'sessions', session.id));
             } catch (error) {
-                console.error("Error deleting week:", error);
+                console.error("Error deleting session:", error);
             }
         }
     };
 
-    const handleEdit = (e, week) => {
+    const handleEdit = (e, session) => {
         e.stopPropagation();
-        setSelectedWeek(week);
-        setWeekModalOpen(true);
+        setSelectedSession(session);
+        setSessionModalOpen(true);
     };
 
-    const handleAddWeek = () => {
-        setSelectedWeek(null);
-        setWeekModalOpen(true);
+    const handleAddSession = () => {
+        setSelectedSession(null);
+        setSessionModalOpen(true);
     };
 
     const handleEditLeague = () => {
@@ -169,8 +169,8 @@ const LeagueDetails = () => {
                         <button
                             onClick={() => setCurrentTab(0)}
                             className={`pb-3 px-1 text-sm font-semibold transition-colors relative ${currentTab === 0
-                                    ? 'text-primary'
-                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                ? 'text-primary'
+                                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                                 }`}
                         >
                             Standings
@@ -182,11 +182,11 @@ const LeagueDetails = () => {
                     <button
                         onClick={() => setCurrentTab(1)}
                         className={`pb-3 px-1 text-sm font-semibold transition-colors relative ${currentTab === 1
-                                ? 'text-primary'
-                                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                            ? 'text-primary'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                             }`}
                     >
-                        Weeks
+                        Sessions
                         {currentTab === 1 && (
                             <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>
                         )}
@@ -220,8 +220,8 @@ const LeagueDetails = () => {
                                         <td className="px-6 py-4 text-right text-gray-500 dark:text-gray-400">{row.pointsFor}</td>
                                         <td className="px-6 py-4 text-right text-gray-500 dark:text-gray-400">{row.pointsAgainst}</td>
                                         <td className={`px-6 py-4 text-right font-bold ${row.diff > 0 ? 'text-green-600 dark:text-green-400' :
-                                                row.diff < 0 ? 'text-red-500 dark:text-red-400' :
-                                                    'text-gray-500 dark:text-gray-400'
+                                            row.diff < 0 ? 'text-red-500 dark:text-red-400' :
+                                                'text-gray-500 dark:text-gray-400'
                                             }`}>
                                             {row.diff > 0 ? `+${row.diff}` : row.diff}
                                         </td>
@@ -240,44 +240,44 @@ const LeagueDetails = () => {
                 </div>
             )}
 
-            {/* Content: Weeks */}
+            {/* Content: Sessions */}
             {currentTab === 1 && (
                 <>
                     <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-lg font-bold text-gray-800 dark:text-white">All Weeks</h2>
+                        <h2 className="text-lg font-bold text-gray-800 dark:text-white">All Sessions</h2>
                         {isAdmin && (
                             <button
-                                onClick={handleAddWeek}
+                                onClick={handleAddSession}
                                 className="bg-primary hover:bg-primary-dark text-white px-3 py-1.5 rounded-lg text-sm font-semibold shadow-sm transition-colors flex items-center gap-1"
                             >
                                 <span className="material-symbols-outlined text-lg">add</span>
-                                Add Week
+                                Add Session
                             </button>
                         )}
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        {weeks.map((week) => (
+                        {sessions.map((session) => (
                             <div
-                                key={week.id}
-                                onClick={() => navigate(`/clubs/${clubId}/leagues/${id}/weeks/${week.id}`)}
+                                key={session.id}
+                                onClick={() => navigate(`/clubs/${clubId}/leagues/${id}/sessions/${session.id}`)}
                                 className="bg-surface-light dark:bg-surface-dark rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 cursor-pointer hover:border-primary transition-all group relative"
                             >
                                 <div className="flex justify-between items-start mb-2">
                                     <h3 className="font-bold text-gray-900 dark:text-white text-lg group-hover:text-primary transition-colors">
-                                        {week.name}
+                                        {session.name}
                                     </h3>
                                     {isAdmin && (
                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2 bg-surface-light dark:bg-surface-dark p-1 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm">
                                             <button
-                                                onClick={(e) => handleEdit(e, week)}
+                                                onClick={(e) => handleEdit(e, session)}
                                                 className="p-1.5 text-gray-400 hover:text-primary hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                                                 title="Edit"
                                             >
                                                 <span className="material-symbols-outlined text-base">edit</span>
                                             </button>
                                             <button
-                                                onClick={(e) => handleDelete(e, week)}
+                                                onClick={(e) => handleDelete(e, session)}
                                                 className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                                                 title="Delete"
                                             >
@@ -290,13 +290,13 @@ const LeagueDetails = () => {
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
                                         <span className="material-symbols-outlined text-base text-gray-400">sports_tennis</span>
-                                        <span>{week.gamesPerPlayer ? `${week.gamesPerPlayer} Rounds` : 'Rounds not set'}</span>
+                                        <span>{session.gamesPerPlayer ? `${session.gamesPerPlayer} Rounds` : 'Rounds not set'}</span>
                                     </div>
                                     <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
                                         <span className="material-symbols-outlined text-base text-gray-400">group</span>
-                                        <span>{week.players ? week.players.length : 0} Players</span>
+                                        <span>{session.players ? session.players.length : 0} Players</span>
                                     </div>
-                                    {week.status === 'COMPLETED' && (
+                                    {session.status === 'COMPLETED' && (
                                         <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
                                             <span className="material-symbols-outlined text-sm">check_circle</span>
                                             COMPLETED
@@ -307,12 +307,12 @@ const LeagueDetails = () => {
                         ))}
                     </div>
 
-                    {weeks.length === 0 && (
+                    {sessions.length === 0 && (
                         <div className="text-center py-10 bg-surface-light dark:bg-surface-dark rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
-                            <p className="text-gray-500 dark:text-gray-400">No weeks found.</p>
+                            <p className="text-gray-500 dark:text-gray-400">No sessions found.</p>
                             {isAdmin && (
-                                <button onClick={handleAddWeek} className="mt-2 text-primary hover:underline text-sm font-medium">
-                                    Create your first week
+                                <button onClick={handleAddSession} className="mt-2 text-primary hover:underline text-sm font-medium">
+                                    Create your first session
                                 </button>
                             )}
                         </div>
@@ -320,10 +320,10 @@ const LeagueDetails = () => {
                 </>
             )}
 
-            <WeekModal
-                open={weekModalOpen}
-                onClose={() => setWeekModalOpen(false)}
-                week={selectedWeek}
+            <SessionModal
+                open={sessionModalOpen}
+                onClose={() => setSessionModalOpen(false)}
+                session={selectedSession}
                 league={league}
             />
 

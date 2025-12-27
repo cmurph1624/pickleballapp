@@ -28,9 +28,17 @@ const TransactionHistoryModal = ({ open, onClose, userId, userEmail }) => {
                         return;
                     }
 
-                    // 2. Fetch Related Weeks
-                    const weekIds = [...new Set(bets.map(b => b.weekId))];
-                    const weeksData = {};
+                    // 2. Fetch Related Sessions (using weekId field on bets effectively as sessionId reference)
+                    // Note: If we refactored the Bet model to use sessionId, we'd update this access.
+                    // Assuming for now bet.weekId still stores the ID of the parent container (now session)
+                    // OR we should be mindful if we need to migrate the bet model fields too.
+                    // For now, assuming bet.weekId -> bet.sessionId concept, we look up in sessions collection.
+
+                    // Check if bets have sessionId, if not fallback to weekId.
+                    // If migration happened, we might have kept old field weekId or added new one.
+                    // Let's assume bets still have 'weekId' pointing to the document ID.
+                    const sessionIds = [...new Set(bets.map(b => b.sessionId || b.weekId))];
+                    const sessionsData = {};
 
                     const playersSnap = await getDocs(collection(db, 'players'));
                     const playersMap = {};
@@ -38,20 +46,21 @@ const TransactionHistoryModal = ({ open, onClose, userId, userEmail }) => {
                         playersMap[doc.id] = `${doc.data().firstName} ${doc.data().lastName}`;
                     });
 
-                    // Fetch Weeks (using Promise.all for simplicity/performance in this context)
-                    const weekDocs = await Promise.all(weekIds.map(id => getDocs(query(collection(db, 'weeks'), where(documentId(), '==', id)))));
+                    // Fetch Sessions
+                    const sessionDocs = await Promise.all(sessionIds.map(id => getDocs(query(collection(db, 'sessions'), where(documentId(), '==', id)))));
 
-                    weekDocs.forEach(snap => {
+                    sessionDocs.forEach(snap => {
                         if (!snap.empty) {
                             const doc = snap.docs[0];
-                            weeksData[doc.id] = doc.data();
+                            sessionsData[doc.id] = doc.data();
                         }
                     });
 
                     // 3. Assemble Data
                     const history = bets.map(bet => {
-                        const week = weeksData[bet.weekId];
-                        const match = week?.matches?.find(m => m.id === bet.matchId);
+                        const sessionId = bet.sessionId || bet.weekId;
+                        const session = sessionsData[sessionId];
+                        const match = session?.matches?.find(m => m.id === bet.matchId);
 
                         let matchDesc = "Unknown Match";
                         if (match) {
@@ -77,7 +86,7 @@ const TransactionHistoryModal = ({ open, onClose, userId, userEmail }) => {
 
                         return {
                             ...bet,
-                            leagueName: week?.name || 'Unknown Week',
+                            sessionName: session?.name || 'Unknown Session',
                             matchDesc,
                             pnl,
                             pnlColor
@@ -129,7 +138,7 @@ const TransactionHistoryModal = ({ open, onClose, userId, userEmail }) => {
                                 <div key={tx.id} className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-700">
                                     <div className="flex justify-between items-start mb-2">
                                         <div className="font-bold text-gray-900 dark:text-white">
-                                            {tx.leagueName}
+                                            {tx.sessionName}
                                         </div>
                                         <div className={`font-bold ${tx.status === 'OPEN' ? 'text-gray-500' : tx.pnlColor}`}>
                                             {tx.status === 'OPEN' ? 'PENDING' :
@@ -155,9 +164,9 @@ const TransactionHistoryModal = ({ open, onClose, userId, userEmail }) => {
                                                 {new Date(tx.createdAt.seconds * 1000).toLocaleDateString()}
                                             </span>
                                             <span className={`px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${tx.status === 'WON' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
-                                                    tx.status === 'LOST' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
-                                                        tx.status === 'OPEN' ? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300' :
-                                                            'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                                                tx.status === 'LOST' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
+                                                    tx.status === 'OPEN' ? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300' :
+                                                        'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
                                                 }`}>
                                                 {tx.status}
                                             </span>

@@ -10,7 +10,7 @@ const UserDashboard = () => {
     const navigate = useNavigate();
 
     // Data States
-    const [upcomingWeeks, setUpcomingWeeks] = useState([]);
+    const [upcomingSessions, setUpcomingSessions] = useState([]);
     const [openBets, setOpenBets] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -29,20 +29,20 @@ const UserDashboard = () => {
                     linkedPlayerId = playerSnap.docs[0].id;
                 }
 
-                // 2. Fetch Upcoming Weeks
+                // 2. Fetch Upcoming Sessions
                 if (linkedPlayerId) {
-                    const weeksRef = collection(db, 'weeks');
-                    const qWeeks = query(weeksRef, where('players', 'array-contains', linkedPlayerId));
-                    const weeksSnap = await getDocs(qWeeks);
+                    const sessionsRef = collection(db, 'sessions');
+                    const qSessions = query(sessionsRef, where('players', 'array-contains', linkedPlayerId));
+                    const sessionsSnap = await getDocs(qSessions);
 
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
 
-                    const validWeeks = weeksSnap.docs
+                    const validSessions = sessionsSnap.docs
                         .map(doc => ({ id: doc.id, ...doc.data() }))
-                        .filter(w => {
-                            if (!w.scheduledDate) return false;
-                            const d = w.scheduledDate.toDate ? w.scheduledDate.toDate() : new Date(w.scheduledDate);
+                        .filter(s => {
+                            if (!s.scheduledDate) return false;
+                            const d = s.scheduledDate.toDate ? s.scheduledDate.toDate() : new Date(s.scheduledDate);
                             return d >= today;
                         })
                         .sort((a, b) => {
@@ -51,7 +51,7 @@ const UserDashboard = () => {
                             return dateA - dateB;
                         });
 
-                    setUpcomingWeeks(validWeeks);
+                    setUpcomingSessions(validSessions);
                 }
 
                 // 3. Fetch Open Bets
@@ -136,14 +136,14 @@ const UserDashboard = () => {
                         <button className="text-xs font-semibold text-primary hover:text-primary-dark" onClick={() => alert("Go to schedule/calendar")}>View All</button>
                     </div>
 
-                    {upcomingWeeks.length > 0 ? (
-                        upcomingWeeks.map(week => {
-                            const { month, day, time } = formatDate(week.scheduledDate);
+                    {upcomingSessions.length > 0 ? (
+                        upcomingSessions.map(session => {
+                            const { month, day, time } = formatDate(session.scheduledDate);
                             return (
                                 <div
-                                    key={week.id}
+                                    key={session.id}
                                     className="bg-surface-light dark:bg-surface-dark rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-3 last:mb-0 cursor-pointer hover:border-primary transition"
-                                    onClick={() => navigate(`/clubs/${week.clubId || 'unknown'}/leagues/${week.leagueId}/weeks/${week.id}`)}
+                                    onClick={() => navigate(`/clubs/${session.clubId || 'unknown'}/leagues/${session.leagueId}/sessions/${session.id}`)}
                                 >
                                     <div className="flex justify-between items-start mb-3">
                                         <div>
@@ -151,7 +151,7 @@ const UserDashboard = () => {
                                                 Next Match
                                             </span>
                                             <h4 className="text-base font-semibold mt-2 text-gray-900 dark:text-white capitalize">
-                                                {week.name}
+                                                {session.name}
                                             </h4>
                                         </div>
                                         <div className="text-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg p-2 min-w-[60px]">

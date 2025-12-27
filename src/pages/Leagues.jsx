@@ -5,7 +5,7 @@ import { db } from '../firebase';
 import LeagueModal from '../components/LeagueModal';
 import { useAuth } from '../contexts/AuthContext';
 import { useClub } from '../contexts/ClubContext';
-import { completeWeek } from '../services/WeekService';
+import { completeSession } from '../services/SessionService';
 
 const Leagues = () => {
     const [leagues, setLeagues] = useState([]);
@@ -66,19 +66,20 @@ const Leagues = () => {
     const handleToggleArchive = async (e, league) => {
         e.stopPropagation();
         try {
-            // If we are ARCHIVING (currently not archived), we must close out all weeks
+            // If we are ARCHIVING (currently not archived), we must close out all sessions
             if (!league.archived) {
-                if (!window.confirm(`Archive ${league.name}? This will complete all weeks, settle bets, and refund unplayed bets.`)) {
+                if (!window.confirm(`Archive ${league.name}? This will complete all sessions, settle bets, and refund unplayed bets.`)) {
                     return;
                 }
 
-                console.log(`Archiving league ${league.id}, completing all weeks...`);
-                const weeksQuery = query(collection(db, 'weeks'), where('leagueId', '==', league.id));
-                const weeksSnapshot = await getDocs(weeksQuery);
+                console.log(`Archiving league ${league.id}, completing all sessions...`);
+                // Query sessions instead of weeks
+                const sessionsQuery = query(collection(db, 'sessions'), where('leagueId', '==', league.id));
+                const sessionsSnapshot = await getDocs(sessionsQuery);
 
-                const completionPromises = weeksSnapshot.docs.map(weekDoc => completeWeek(weekDoc.id));
+                const completionPromises = sessionsSnapshot.docs.map(sessionDoc => completeSession(sessionDoc.id));
                 await Promise.all(completionPromises);
-                console.log("All weeks completed.");
+                console.log("All sessions completed.");
             }
 
             await updateDoc(doc(db, 'leagues', league.id), {

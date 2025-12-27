@@ -3,7 +3,7 @@ import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, B
 import { collection, addDoc, doc, updateDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 
-const WeekModal = ({ open, onClose, week, league }) => {
+const SessionModal = ({ open, onClose, session, league }) => {
     const [formData, setFormData] = useState({
         name: '',
         players: [],
@@ -40,13 +40,13 @@ const WeekModal = ({ open, onClose, week, league }) => {
     }, [league]);
 
     useEffect(() => {
-        if (week) {
+        if (session) {
             setFormData({
-                name: week.name,
-                players: week.players || [],
-                gamesPerPlayer: week.gamesPerPlayer || '',
-                bettingDeadline: week.bettingDeadline || '',
-                scheduledDate: week.scheduledDate || ''
+                name: session.name,
+                players: session.players || [],
+                gamesPerPlayer: session.gamesPerPlayer || '',
+                bettingDeadline: session.bettingDeadline || '',
+                scheduledDate: session.scheduledDate || ''
             });
         } else {
             setFormData({
@@ -57,7 +57,7 @@ const WeekModal = ({ open, onClose, week, league }) => {
                 scheduledDate: ''
             });
         }
-    }, [week, open]);
+    }, [session, open]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -89,34 +89,34 @@ const WeekModal = ({ open, onClose, week, league }) => {
         };
 
         try {
-            if (week) {
-                await updateDoc(doc(db, 'weeks', week.id), data);
+            if (session) {
+                await updateDoc(doc(db, 'sessions', session.id), data);
             } else {
                 data.createdAt = new Date();
                 data.createdBy = auth.currentUser ? auth.currentUser.uid : 'anonymous';
-                await addDoc(collection(db, 'weeks'), data);
+                await addDoc(collection(db, 'sessions'), data);
             }
             onClose();
         } catch (error) {
-            console.error("Error saving week:", error);
-            alert("Error saving week: " + error.message);
+            console.error("Error saving session:", error);
+            alert("Error saving session: " + error.message);
         }
     };
 
     return (
         <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-            <DialogTitle>{week ? 'Edit Week' : 'Add Week'}</DialogTitle>
+            <DialogTitle>{session ? 'Edit Session' : 'Add Session'}</DialogTitle>
             <form onSubmit={handleSubmit}>
                 <DialogContent>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         <TextField
-                            label="Week Name"
+                            label="Session Name"
                             name="name"
                             value={formData.name}
                             onChange={handleChange}
                             required
                             fullWidth
-                            placeholder="e.g. Week 1"
+                            placeholder="e.g. Session 1"
                         />
 
                         <TextField
@@ -160,7 +160,7 @@ const WeekModal = ({ open, onClose, week, league }) => {
                             onChange={handleChange}
                             fullWidth
                             InputLabelProps={{ shrink: true }}
-                            helperText="When this week's games are played"
+                            helperText="When this session's games are played"
                         />
 
                         <Box>
@@ -198,4 +198,4 @@ const WeekModal = ({ open, onClose, week, league }) => {
     );
 };
 
-export default WeekModal;
+export default SessionModal;

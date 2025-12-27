@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Box, Typography } from '@mui/material';
 
-const WeekScorecard = ({ weekName, matches, players }) => {
+const SessionScorecard = ({ sessionName, matches, players }) => {
 
     // Group matches into rounds
     const rounds = useMemo(() => {
@@ -23,7 +23,7 @@ const WeekScorecard = ({ weekName, matches, players }) => {
     return (
         <Box sx={{ width: '100%', p: 2, height: '100%', color: 'black' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, borderBottom: '2px solid black', pb: 1 }}>
-                <Typography variant="h5" fontWeight="bold">{weekName}</Typography>
+                <Typography variant="h5" fontWeight="bold">{sessionName}</Typography>
                 <Typography variant="body2">Pickleball Schedule</Typography>
             </Box>
 
@@ -87,4 +87,4 @@ const WeekScorecard = ({ weekName, matches, players }) => {
     );
 };
 
-export default WeekScorecard;
+export default SessionScorecard;
