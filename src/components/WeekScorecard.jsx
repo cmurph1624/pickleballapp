@@ -21,13 +21,13 @@ const WeekScorecard = ({ weekName, matches, players }) => {
     };
 
     return (
-        <Box sx={{ width: '100%', p: 2, height: '100%' }}>
+        <Box sx={{ width: '100%', p: 2, height: '100%', color: 'black' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, borderBottom: '2px solid black', pb: 1 }}>
                 <Typography variant="h5" fontWeight="bold">{weekName}</Typography>
                 <Typography variant="body2">Pickleball Schedule</Typography>
             </Box>
 
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', tableLayout: 'fixed' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', tableLayout: 'fixed', color: 'black' }}>
                 <thead>
                     <tr>
                         <th style={{ width: '60px', border: '1px solid black', padding: '4px', background: '#e0e0e0' }}>Round</th>
@@ -66,7 +66,7 @@ const WeekScorecard = ({ weekName, matches, players }) => {
                                                 </span>
                                                 {spread1 && <span style={{ fontSize: '10px', fontWeight: 'bold' }}>{spread1}</span>}
                                             </Box>
-                                            <Box sx={{ textAlign: 'center', fontSize: '9px', color: '#666', my: -0.5 }}>vs</Box>
+                                            <Box sx={{ textAlign: 'center', fontSize: '9px', color: 'black', my: -0.5 }}>vs</Box>
                                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                                 <span style={{ fontWeight: match.favoriteTeam === 2 ? 'bold' : 'normal' }}>
                                                     {p3} & {p4}

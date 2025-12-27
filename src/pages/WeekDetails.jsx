@@ -211,6 +211,13 @@ const WeekDetails = () => {
                 display: block !important;
                 visibility: visible;
             }
+            * {
+                color: black !important;
+                opacity: 1 !important;
+                text-shadow: none !important;
+                filter: none !important;
+                -webkit-text-fill-color: black !important;
+            }
         }
         .print-only {
             display: none;
