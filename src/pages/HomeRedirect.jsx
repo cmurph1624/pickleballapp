@@ -8,15 +8,21 @@ import UserDashboard from './UserDashboard';
 // Reusing ClubDashboard as the "No Club / Create Club" view, 
 // but if user HAS clubs, we redirect.
 
+import Layout from '../components/Layout';
+
 const HomeRedirect = () => {
     const { currentUser } = useAuth();
-    // If logged in, show User Dashboard (home base)
+    // If logged in, show User Dashboard (home base) - NEW DESIGN (No Layout Wrapper)
     if (currentUser) {
         return <UserDashboard />;
     }
 
-    // If not logged in, show the generic landing / club selector
-    return <ClubDashboard />;
+    // If not logged in, show the generic landing / club selector - OLD DESIGN (Needs Layout)
+    return (
+        <Layout>
+            <ClubDashboard />
+        </Layout>
+    );
 };
 
 export default HomeRedirect;

@@ -27,7 +27,7 @@ function App() {
         <Router>
           <Routes>
             {/* Root Route: Redirects or shows generic dashboard */}
-            <Route path="/" element={<Layout><HomeRedirect /></Layout>} />
+            <Route path="/" element={<HomeRedirect />} />
             <Route path="/join/:clubId" element={<Layout><JoinClub /></Layout>} />
 
             {/* Club Routes (With Club Context) */}
