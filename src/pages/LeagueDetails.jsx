@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Typography, Box, List, ListItem, ListItemText, IconButton, Fab, Paper, Button, ListItemButton, Tabs, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, ArrowBack } from '@mui/icons-material';
 import { collection, query, where, onSnapshot, doc, deleteDoc, getDoc } from 'firebase/firestore';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
@@ -99,7 +97,8 @@ const LeagueDetails = () => {
         }
     }, [players, weeks, league]);
 
-    const handleDelete = async (week) => {
+    const handleDelete = async (e, week) => {
+        e.stopPropagation();
         if (window.confirm(`Are you sure you want to delete ${week.name}?`)) {
             try {
                 await deleteDoc(doc(db, 'weeks', week.id));
@@ -109,7 +108,8 @@ const LeagueDetails = () => {
         }
     };
 
-    const handleEdit = (week) => {
+    const handleEdit = (e, week) => {
+        e.stopPropagation();
         setSelectedWeek(week);
         setWeekModalOpen(true);
     };
@@ -123,118 +123,200 @@ const LeagueDetails = () => {
         setLeagueModalOpen(true);
     }
 
-    if (loading) return <Typography>Loading...</Typography>;
-    if (!league) return <Typography>League not found</Typography>;
+    if (loading) return (
+        <div className="flex justify-center items-center min-h-[50vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+    );
+
+    if (!league) return <div className="p-4 text-center">League not found</div>;
 
     return (
-        <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <IconButton onClick={() => navigate(`/clubs/${clubId}/leagues`)} sx={{ mr: 1 }}>
-                        <ArrowBack />
-                    </IconButton>
-                    <Typography variant="h4">{league.name}</Typography>
-                </Box>
+        <div className="w-full">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => navigate(`/clubs/${clubId}/leagues`)}
+                        className="p-2 -ml-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                    >
+                        <span className="material-symbols-outlined">arrow_back</span>
+                    </button>
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                            {league.name}
+                        </h1>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {league.type} League
+                        </p>
+                    </div>
+                </div>
+
                 {isAdmin && (
-                    <Button startIcon={<EditIcon />} onClick={handleEditLeague}>
+                    <button
+                        onClick={handleEditLeague}
+                        className="text-primary hover:text-primary-dark font-semibold text-sm flex items-center gap-1 transition-colors"
+                    >
+                        <span className="material-symbols-outlined text-lg">edit</span>
                         Edit League
-                    </Button>
+                    </button>
                 )}
-            </Box>
+            </div>
 
-            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-                <Tabs value={currentTab} onChange={(e, val) => setCurrentTab(val)}>
-                    {league.type !== 'Open Play' && <Tab label="Standings" />}
-                    <Tab label="Weeks" />
-                </Tabs>
-            </Box>
+            {/* Tabs */}
+            <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
+                <div className="flex gap-6">
+                    {league.type !== 'Open Play' && (
+                        <button
+                            onClick={() => setCurrentTab(0)}
+                            className={`pb-3 px-1 text-sm font-semibold transition-colors relative ${currentTab === 0
+                                    ? 'text-primary'
+                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                }`}
+                        >
+                            Standings
+                            {currentTab === 0 && (
+                                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>
+                            )}
+                        </button>
+                    )}
+                    <button
+                        onClick={() => setCurrentTab(1)}
+                        className={`pb-3 px-1 text-sm font-semibold transition-colors relative ${currentTab === 1
+                                ? 'text-primary'
+                                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                            }`}
+                    >
+                        Weeks
+                        {currentTab === 1 && (
+                            <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>
+                        )}
+                    </button>
+                </div>
+            </div>
 
+            {/* Content: Standings */}
             {currentTab === 0 && league.type !== 'Open Play' && (
-                <TableContainer component={Paper}>
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableCell>Rank</TableCell>
-                                <TableCell>Player</TableCell>
-                                <TableCell align="right">Wins</TableCell>
-                                <TableCell align="right">Losses</TableCell>
-                                <TableCell align="right">PF</TableCell>
-                                <TableCell align="right">PA</TableCell>
-                                <TableCell align="right">Diff</TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {standings.map((row) => (
-                                <TableRow key={row.id}>
-                                    <TableCell component="th" scope="row">
-                                        {row.rank}
-                                    </TableCell>
-                                    <TableCell>{row.name}</TableCell>
-                                    <TableCell align="right">{row.wins}</TableCell>
-                                    <TableCell align="right">{row.losses}</TableCell>
-                                    <TableCell align="right">{row.pointsFor}</TableCell>
-                                    <TableCell align="right">{row.pointsAgainst}</TableCell>
-                                    <TableCell align="right" sx={{
-                                        color: row.diff > 0 ? 'success.main' : row.diff < 0 ? 'error.main' : 'text.primary',
-                                        fontWeight: 'bold'
-                                    }}>
-                                        {row.diff > 0 ? `+${row.diff}` : row.diff}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
+                <div className="bg-surface-light dark:bg-surface-dark rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-gray-500 dark:text-gray-400 uppercase bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
+                                <tr>
+                                    <th className="px-6 py-3 font-semibold">Rank</th>
+                                    <th className="px-6 py-3 font-semibold">Player</th>
+                                    <th className="px-6 py-3 font-semibold text-right">Wins</th>
+                                    <th className="px-6 py-3 font-semibold text-right">Losses</th>
+                                    <th className="px-6 py-3 font-semibold text-right">PF</th>
+                                    <th className="px-6 py-3 font-semibold text-right">PA</th>
+                                    <th className="px-6 py-3 font-semibold text-right">Diff</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200 dark:divide-gray-700 text-gray-800 dark:text-gray-200">
+                                {standings.map((row) => (
+                                    <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                                        <td className="px-6 py-4 font-bold text-gray-900 dark:text-white">{row.rank}</td>
+                                        <td className="px-6 py-4 font-medium">{row.name}</td>
+                                        <td className="px-6 py-4 text-right">{row.wins}</td>
+                                        <td className="px-6 py-4 text-right">{row.losses}</td>
+                                        <td className="px-6 py-4 text-right text-gray-500 dark:text-gray-400">{row.pointsFor}</td>
+                                        <td className="px-6 py-4 text-right text-gray-500 dark:text-gray-400">{row.pointsAgainst}</td>
+                                        <td className={`px-6 py-4 text-right font-bold ${row.diff > 0 ? 'text-green-600 dark:text-green-400' :
+                                                row.diff < 0 ? 'text-red-500 dark:text-red-400' :
+                                                    'text-gray-500 dark:text-gray-400'
+                                            }`}>
+                                            {row.diff > 0 ? `+${row.diff}` : row.diff}
+                                        </td>
+                                    </tr>
+                                ))}
+                                {standings.length === 0 && (
+                                    <tr>
+                                        <td colSpan="7" className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                                            No standings available yet. Complete some matches!
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             )}
 
+            {/* Content: Weeks */}
             {currentTab === 1 && (
                 <>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                        <Typography variant="h6">Weeks</Typography>
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-lg font-bold text-gray-800 dark:text-white">All Weeks</h2>
                         {isAdmin && (
-                            <Button variant="contained" startIcon={<AddIcon />} onClick={handleAddWeek}>
+                            <button
+                                onClick={handleAddWeek}
+                                className="bg-primary hover:bg-primary-dark text-white px-3 py-1.5 rounded-lg text-sm font-semibold shadow-sm transition-colors flex items-center gap-1"
+                            >
+                                <span className="material-symbols-outlined text-lg">add</span>
                                 Add Week
-                            </Button>
+                            </button>
                         )}
-                    </Box>
+                    </div>
 
-                    <List>
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                         {weeks.map((week) => (
-                            <Paper key={week.id} sx={{ mb: 2 }}>
-                                <ListItem
-                                    secondaryAction={
-                                        isAdmin && (
-                                            <Box>
-                                                <IconButton onClick={() => handleEdit(week)} color="primary">
-                                                    <EditIcon />
-                                                </IconButton>
-                                                <IconButton onClick={() => handleDelete(week)} color="error">
-                                                    <DeleteIcon />
-                                                </IconButton>
-                                            </Box>
-                                        )
-                                    }
-                                >
-                                    <ListItemButton onClick={() => navigate(`/clubs/${clubId}/leagues/${id}/weeks/${week.id}`)}>
-                                        <ListItemText
-                                            primary={week.name}
-                                            secondary={
-                                                <>
-                                                    <Typography variant="body2" component="span" display="block">
-                                                        {week.gamesPerPlayer ? `${week.gamesPerPlayer} Rounds` : 'Rounds not set'}
-                                                    </Typography>
-                                                    <Typography variant="caption" color="text.secondary">
-                                                        {week.players ? week.players.length : 0} Players
-                                                    </Typography>
-                                                </>
-                                            }
-                                        />
-                                    </ListItemButton>
-                                </ListItem>
-                            </Paper>
+                            <div
+                                key={week.id}
+                                onClick={() => navigate(`/clubs/${clubId}/leagues/${id}/weeks/${week.id}`)}
+                                className="bg-surface-light dark:bg-surface-dark rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 cursor-pointer hover:border-primary transition-all group relative"
+                            >
+                                <div className="flex justify-between items-start mb-2">
+                                    <h3 className="font-bold text-gray-900 dark:text-white text-lg group-hover:text-primary transition-colors">
+                                        {week.name}
+                                    </h3>
+                                    {isAdmin && (
+                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2 bg-surface-light dark:bg-surface-dark p-1 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm">
+                                            <button
+                                                onClick={(e) => handleEdit(e, week)}
+                                                className="p-1.5 text-gray-400 hover:text-primary hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                                                title="Edit"
+                                            >
+                                                <span className="material-symbols-outlined text-base">edit</span>
+                                            </button>
+                                            <button
+                                                onClick={(e) => handleDelete(e, week)}
+                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                                                title="Delete"
+                                            >
+                                                <span className="material-symbols-outlined text-base">delete</span>
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                        <span className="material-symbols-outlined text-base text-gray-400">sports_tennis</span>
+                                        <span>{week.gamesPerPlayer ? `${week.gamesPerPlayer} Rounds` : 'Rounds not set'}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                        <span className="material-symbols-outlined text-base text-gray-400">group</span>
+                                        <span>{week.players ? week.players.length : 0} Players</span>
+                                    </div>
+                                    {week.status === 'COMPLETED' && (
+                                        <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                                            <span className="material-symbols-outlined text-sm">check_circle</span>
+                                            COMPLETED
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         ))}
-                    </List>
-                    {weeks.length === 0 && <Typography color="text.secondary">No weeks found. Add one to get started.</Typography>}
+                    </div>
+
+                    {weeks.length === 0 && (
+                        <div className="text-center py-10 bg-surface-light dark:bg-surface-dark rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
+                            <p className="text-gray-500 dark:text-gray-400">No weeks found.</p>
+                            {isAdmin && (
+                                <button onClick={handleAddWeek} className="mt-2 text-primary hover:underline text-sm font-medium">
+                                    Create your first week
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </>
             )}
 
@@ -250,7 +332,7 @@ const LeagueDetails = () => {
                 onClose={() => setLeagueModalOpen(false)}
                 league={league}
             />
-        </Box>
+        </div>
     );
 };
 

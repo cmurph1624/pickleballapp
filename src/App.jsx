@@ -5,6 +5,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { theme } from './theme';
 import { AuthProvider } from './contexts/AuthContext';
 import Layout from './components/Layout';
+import DashboardLayout from './components/DashboardLayout';
 import Leagues from './pages/Leagues';
 import Players from './pages/Players';
 import LeagueDetails from './pages/LeagueDetails';
@@ -33,9 +34,9 @@ function App() {
             {/* Club Routes (With Club Context) */}
             <Route path="/clubs/:clubId" element={
               <ClubProvider>
-                <Layout>
+                <DashboardLayout>
                   <Outlet />
-                </Layout>
+                </DashboardLayout>
               </ClubProvider>
             }>
               <Route path="leagues" element={<Leagues />} />

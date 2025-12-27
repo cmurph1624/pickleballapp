@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Typography, Box, Paper, List, ListItem, ListItemText, ListItemAvatar, Avatar, Divider } from '@mui/material';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
-import { EmojiEvents } from '@mui/icons-material';
 import TransactionHistoryModal from '../components/TransactionHistoryModal';
 
 const HighRollers = () => {
@@ -33,50 +31,82 @@ const HighRollers = () => {
         setHistoryModalOpen(true);
     };
 
-    if (loading) return <Typography>Loading Leaderboard...</Typography>;
+    if (loading) return (
+        <div className="flex justify-center items-center min-h-[50vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+    );
 
     return (
-        <Box>
-            <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <EmojiEvents color="warning" fontSize="large" />
-                High Rollers
-            </Typography>
-            <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-                The wealthiest players in the league. Click on a player to view their history.
-            </Typography>
+        <div className="w-full">
+            <div className="mb-8">
+                <h1 className="text-3xl font-bold text-gray-800 dark:text-white flex items-center gap-3">
+                    <span className="material-symbols-outlined text-4xl text-yellow-500">emoji_events</span>
+                    High Rollers
+                </h1>
+                <p className="text-gray-500 dark:text-gray-400 mt-2">
+                    The wealthiest players in the league. Click on a player to view their history.
+                </p>
+            </div>
 
-            <Paper sx={{ mt: 3 }}>
-                <List>
-                    {users.map((user, index) => (
-                        <React.Fragment key={user.id}>
-                            <ListItem
-                                button
+            <div className="bg-surface-light dark:bg-surface-dark rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {users.map((user, index) => {
+                        // Styling for top 3
+                        const rankStyles = {
+                            0: {
+                                container: 'bg-gradient-to-r from-yellow-50 to-white dark:from-yellow-900/10 dark:to-surface-dark',
+                                rank: 'bg-yellow-400 text-yellow-900 shadow-yellow-200'
+                            },
+                            1: {
+                                container: 'bg-gradient-to-r from-gray-50 to-white dark:from-gray-800/20 dark:to-surface-dark',
+                                rank: 'bg-gray-300 text-gray-800 shadow-gray-200'
+                            },
+                            2: {
+                                container: 'bg-gradient-to-r from-orange-50 to-white dark:from-orange-900/10 dark:to-surface-dark',
+                                rank: 'bg-orange-300 text-orange-900 shadow-orange-200'
+                            }
+                        };
+
+                        const style = rankStyles[index] || {
+                            container: 'hover:bg-gray-50 dark:hover:bg-gray-800/40',
+                            rank: 'bg-primary text-white'
+                        };
+
+                        return (
+                            <div
+                                key={user.id}
                                 onClick={() => handleUserClick(user)}
-                                sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
+                                className={`flex items-center justify-between p-4 sm:p-6 cursor-pointer transition-all ${style.container}`}
                             >
-                                <ListItemAvatar>
-                                    <Avatar sx={{ bgcolor: index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? '#cd7f32' : 'primary.main' }}>
+                                <div className="flex items-center gap-4 sm:gap-6">
+                                    <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center font-bold text-lg sm:text-xl shadow-sm ${style.rank}`}>
                                         {index + 1}
-                                    </Avatar>
-                                </ListItemAvatar>
-                                <ListItemText
-                                    primary={user.email} // In a real app, use display name
-                                    secondary={`Rank #${index + 1}`}
-                                />
-                                <Typography variant="h6" color="success.main" fontWeight="bold">
-                                    ${user.walletBalance || 0}
-                                </Typography>
-                            </ListItem>
-                            {index < users.length - 1 && <Divider variant="inset" component="li" />}
-                        </React.Fragment>
-                    ))}
+                                    </div>
+                                    <div>
+                                        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
+                                            {user.email} {/* Display Name later */}
+                                        </h3>
+                                        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Rank #{index + 1}</span>
+                                    </div>
+                                </div>
+
+                                <div className="text-right">
+                                    <div className="text-lg sm:text-2xl font-bold text-green-600 dark:text-green-400">
+                                        ${user.walletBalance?.toFixed(2) || '0.00'}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+
                     {users.length === 0 && (
-                        <ListItem>
-                            <ListItemText primary="No high rollers yet." />
-                        </ListItem>
+                        <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+                            No high rollers found yet.
+                        </div>
                     )}
-                </List>
-            </Paper>
+                </div>
+            </div>
 
             <TransactionHistoryModal
                 open={historyModalOpen}
@@ -84,7 +114,7 @@ const HighRollers = () => {
                 userId={selectedUser?.id}
                 userEmail={selectedUser?.email}
             />
-        </Box>
+        </div>
     );
 };
 

@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Typography, Box, Button, Paper, Grid, IconButton, List, ListItem, ListItemText, Radio, RadioGroup, FormControlLabel, FormControl, FormLabel, Tooltip } from '@mui/material';
-import { ArrowBack, Refresh, Delete, CheckCircle, Lock, Print } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { generateMatches } from '../utils/matchGenerator';
 import { calculateSpread } from '../services/Oddsmaker';
@@ -18,7 +16,7 @@ import WeekScorecard from '../components/WeekScorecard';
 
 const WeekDetails = () => {
     const { currentUser } = useAuth();
-    const { isAdmin, clubId } = useClub(); // Use Club Permission and ID
+    const { isAdmin, clubId } = useClub();
     const { leagueId, weekId } = useParams();
     const navigate = useNavigate();
     const [week, setWeek] = useState(null);
@@ -53,9 +51,6 @@ const WeekDetails = () => {
 
                 // Fetch Players
                 if (weekData.players && weekData.players.length > 0) {
-                    // Firestore 'in' query supports max 10 items. We might have more.
-                    // Better to fetch all players and filter in memory for now, or batch queries.
-                    // Given the previous pattern, let's fetch all and filter.
                     const playersQuery = query(collection(db, 'players'));
                     const playersSnap = await getDocs(playersQuery);
                     const allPlayers = playersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -74,7 +69,7 @@ const WeekDetails = () => {
     const handleGenerateMatches = async () => {
         if (!week || !players.length) return;
 
-        const gamesPerPlayer = week.gamesPerPlayer || 4; // Default to 4 if not set
+        const gamesPerPlayer = week.gamesPerPlayer || 4;
         let newMatches = generateMatches(players, gamesPerPlayer, matchmakingMode);
 
         // Calculate Spreads for each match
@@ -92,7 +87,7 @@ const WeekDetails = () => {
         if (!validation.isValid) {
             console.error(validation.error);
             alert(validation.error);
-            return; // STOP execution, do not save to DB
+            return;
         }
 
         // Save to Firestore
@@ -130,7 +125,6 @@ const WeekDetails = () => {
     };
 
     const handleSaveScore = async (matchId, team1Score, team2Score) => {
-        // 1. Update local match state
         const updatedMatches = matches.map(m => {
             if (m.id === matchId) {
                 return { ...m, team1Score, team2Score };
@@ -140,12 +134,9 @@ const WeekDetails = () => {
         setMatches(updatedMatches);
 
         try {
-            // 2. Save Match Score to Firestore
-            // Note: Ratings and Bets are now resolved in handleCompleteWeek
             await updateDoc(doc(db, 'weeks', weekId), {
                 matches: updatedMatches
             });
-
         } catch (error) {
             console.error("Error saving score:", error);
             alert("Error saving score: " + error.message);
@@ -187,8 +178,13 @@ const WeekDetails = () => {
         return { team1: t1, team2: t2 };
     };
 
-    if (loading) return <Typography>Loading...</Typography>;
-    if (!week) return <Typography>Week not found</Typography>;
+    if (loading) return (
+        <div className="flex justify-center items-center min-h-[50vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+    );
+
+    if (!week) return <div className="p-4 text-center">Week not found</div>;
 
     const printStyles = `
         @media print {
@@ -222,205 +218,229 @@ const WeekDetails = () => {
     `;
 
     return (
-        <Box id="week-content-root">
+        <div id="week-content-root" className="w-full">
             <style>{printStyles}</style>
 
-            <Box className="print-only">
+            <div className="print-only">
                 <WeekScorecard weekName={week.name} matches={matches} players={players} />
-            </Box>
+            </div>
 
-            <Box className="screen-only">
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <IconButton onClick={() => navigate(`/clubs/${clubId}/leagues/${leagueId}`)} sx={{ mr: 1 }} className="no-print">
-                        <ArrowBack />
-                    </IconButton>
-                    <Typography variant="h4">{week.name}</Typography>
-                </Box>
+            <div className="screen-only">
+                {/* Header */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => navigate(`/clubs/${clubId}/leagues/${leagueId}`)}
+                            className="p-2 -ml-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors no-print"
+                        >
+                            <span className="material-symbols-outlined">arrow_back</span>
+                        </button>
+                        <div>
+                            <h1 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                                {week.name}
+                            </h1>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                Players: {players.length} | Target Rounds: {week.gamesPerPlayer || 'N/A'}
+                            </p>
+                        </div>
+                    </div>
+                </div>
 
-                <Box sx={{ mb: 3 }}>
-                    <Typography variant="subtitle1">
-                        Players: {players.length} | Target Rounds: {week.gamesPerPlayer || 'N/A'}
-                    </Typography>
-                </Box>
-
+                {/* Control Bar */}
                 {isAdmin && (
-                    <Box sx={{ display: 'flex', gap: 2, mb: 3 }} className="no-print">
+                    <div className="bg-surface-light dark:bg-surface-dark p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mb-6 flex flex-col xl:flex-row xl:items-center justify-between gap-4 no-print">
                         {week.status === 'COMPLETED' ? (
-                            <Button variant="contained" disabled startIcon={<Lock />}>
+                            <div className="flex items-center gap-2 text-green-600 dark:text-green-400 font-bold bg-green-100 dark:bg-green-900/30 px-4 py-2 rounded-lg">
+                                <span className="material-symbols-outlined">lock</span>
                                 Week Completed
-                            </Button>
+                            </div>
                         ) : (
                             <>
-                                <FormControl component="fieldset" sx={{ mr: 2, border: 1, borderColor: 'divider', borderRadius: 1, px: 2, py: 0.5 }}>
-                                    <RadioGroup
-                                        row
-                                        aria-label="matchmaking-mode"
-                                        name="matchmaking-mode"
-                                        value={matchmakingMode}
-                                        onChange={(e) => setMatchmakingMode(e.target.value)}
+                                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                                    <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+                                        <button
+                                            onClick={() => setMatchmakingMode('STRICT_SOCIAL')}
+                                            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${matchmakingMode === 'STRICT_SOCIAL' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+                                            title="Prioritize mixing everyone together"
+                                        >
+                                            Social
+                                        </button>
+                                        <button
+                                            onClick={() => setMatchmakingMode('WEIGHTED_COMPETITIVE')}
+                                            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${matchmakingMode === 'WEIGHTED_COMPETITIVE' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+                                            title="Prioritize balanced games by HiddenRanking"
+                                        >
+                                            Competitive
+                                        </button>
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={handleGenerateMatches}
+                                            disabled={matches.some(m => m.team1Score !== undefined || m.team2Score !== undefined)}
+                                            className="bg-primary hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1 transition-colors"
+                                        >
+                                            <span className="material-symbols-outlined text-lg">autorenew</span>
+                                            Generate
+                                        </button>
+                                        {matches.length > 0 && (
+                                            <button
+                                                onClick={handleClearMatches}
+                                                disabled={matches.some(m => m.team1Score !== undefined || m.team2Score !== undefined)}
+                                                className="border border-red-500 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1 transition-colors"
+                                            >
+                                                <span className="material-symbols-outlined text-lg">delete</span>
+                                                Clear
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2">
+                                    {matches.length > 0 && (
+                                        <>
+                                            <button
+                                                onClick={() => setFrequencyModalOpen(true)}
+                                                className="border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1 transition-colors"
+                                            >
+                                                <span className="material-symbols-outlined text-lg">analytics</span>
+                                                Analysis
+                                            </button>
+                                            <button
+                                                onClick={() => window.print()}
+                                                className="border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1 transition-colors"
+                                            >
+                                                <span className="material-symbols-outlined text-lg">print</span>
+                                                Print
+                                            </button>
+                                        </>
+                                    )}
+                                    <button
+                                        onClick={handleCompleteWeek}
+                                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1 transition-colors shadow-sm ml-auto sm:ml-0"
                                     >
-                                        <Tooltip title="Prioritize mixing everyone together">
-                                            <FormControlLabel value="STRICT_SOCIAL" control={<Radio size="small" />} label={<Typography variant="body2">Social</Typography>} />
-                                        </Tooltip>
-                                        <Tooltip title="Prioritize balanced games by HiddenRanking">
-                                            <FormControlLabel value="WEIGHTED_COMPETITIVE" control={<Radio size="small" />} label={<Typography variant="body2">Competitive</Typography>} />
-                                        </Tooltip>
-                                    </RadioGroup>
-                                </FormControl>
-                                <Button
-                                    variant="contained"
-                                    startIcon={<Refresh />}
-                                    onClick={handleGenerateMatches}
-                                    disabled={matches.some(m => m.team1Score !== undefined || m.team2Score !== undefined)}
-                                >
-                                    Generate Matches
-                                </Button>
-                                {matches.length > 0 && (
-                                    <Button
-                                        variant="outlined"
-                                        color="error"
-                                        startIcon={<Delete />}
-                                        onClick={handleClearMatches}
-                                        disabled={matches.some(m => m.team1Score !== undefined || m.team2Score !== undefined)}
-                                    >
-                                        Clear Matches
-                                    </Button>
-                                )}
-                                {matches.length > 0 && (
-                                    <Button
-                                        variant="outlined"
-                                        color="info"
-                                        onClick={() => setFrequencyModalOpen(true)}
-                                    >
-                                        Match Analysis
-                                    </Button>
-                                )}
-                                {matches.length > 0 && (
-                                    <Button
-                                        variant="outlined"
-                                        startIcon={<Print />}
-                                        onClick={() => window.print()}
-                                    >
-                                        Print
-                                    </Button>
-                                )}
-                                <Button
-                                    variant="contained"
-                                    color="success"
-                                    startIcon={<CheckCircle />}
-                                    onClick={handleCompleteWeek}
-                                    sx={{ ml: 'auto' }}
-                                >
-                                    Complete Week
-                                </Button>
+                                        <span className="material-symbols-outlined text-lg">check_circle</span>
+                                        Complete Week
+                                    </button>
+                                </div>
                             </>
                         )}
-                    </Box>
+                    </div>
                 )}
 
-                <Typography variant="h5" gutterBottom>Matches ({matches.length})</Typography>
+                <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">Matches ({matches.length})</h2>
 
-                <Box>
+                {/* Match List */}
+                <div className="space-y-8">
                     {(() => {
                         const matchesPerRound = Math.floor(players.length / 4);
-                        // If matchesPerRound is 0 (e.g. < 4 players), fallback to 1 to show something, though generator shouldn't run.
                         const chunkSize = matchesPerRound > 0 ? matchesPerRound : 1;
-
                         const rounds = [];
                         for (let i = 0; i < matches.length; i += chunkSize) {
                             rounds.push(matches.slice(i, i + chunkSize));
                         }
 
                         return rounds.map((roundMatches, roundIndex) => (
-                            <Box key={roundIndex} sx={{ mb: 4 }} className="print-break-inside">
-                                <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', borderBottom: 1, borderColor: 'divider', pb: 1 }}>
+                            <div key={roundIndex} className="print-break-inside">
+                                <h3 className="text-lg font-semibold text-primary mb-3 pb-1 border-b border-gray-200 dark:border-gray-700">
                                     Round {roundIndex + 1}
-                                </Typography>
-                                <Grid container spacing={2}>
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {roundMatches.map((match, matchIndex) => (
-                                        <Grid item xs={12} md={6} key={match.id || matchIndex}>
-                                            <Paper
-                                                sx={{
-                                                    p: 2,
-                                                    cursor: 'pointer',
-                                                    '&:hover': { bgcolor: 'action.hover' },
-                                                    transition: 'background-color 0.2s'
-                                                }}
-                                                onClick={() => {
-                                                    if (week.status !== 'COMPLETED') {
-                                                        handleMatchClick(match);
-                                                    }
-                                                }}
-                                            >
-                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                                                    <Box>
-                                                        <Typography variant="subtitle2" color="text.secondary">
-                                                            Match {matchIndex + 1}
-                                                        </Typography>
-                                                        {match.spread !== undefined && (
-                                                            <Typography variant="caption" color="primary" sx={{ fontWeight: 'bold' }}>
-                                                                {match.spread === 0 ? "Pick 'em (0)" :
-                                                                    match.favoriteTeam === 1 ? `Team 1 (-${match.spread})` :
-                                                                        match.favoriteTeam === 2 ? `Team 2 (-${match.spread})` : ''}
-                                                            </Typography>
-                                                        )}
-                                                    </Box>
-                                                    {(match.team1Score !== undefined && match.team2Score !== undefined) ? (
-                                                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                                                            Score: {match.team1Score} - {match.team2Score}
-                                                        </Typography>
-                                                    ) : (
-                                                        <Typography variant="caption" sx={{ color: 'text.disabled' }}>
-                                                            Click to score
-                                                        </Typography>
+                                        <div
+                                            key={match.id || matchIndex}
+                                            onClick={() => {
+                                                if (week.status !== 'COMPLETED') {
+                                                    handleMatchClick(match);
+                                                }
+                                            }}
+                                            className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-xl p-4 cursor-pointer hover:border-primary transition-all shadow-sm hover:shadow-md group relative"
+                                        >
+                                            {/* Header: Label and Spread */}
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div>
+                                                    <span className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wide">
+                                                        Match {matchIndex + 1}
+                                                    </span>
+                                                    {match.spread !== undefined && (
+                                                        <span className="block text-xs font-bold text-primary mt-0.5">
+                                                            {match.spread === 0 ? "Pick 'em" :
+                                                                match.favoriteTeam === 1 ? `Team 1 (-${match.spread})` :
+                                                                    match.favoriteTeam === 2 ? `Team 2 (-${match.spread})` : ''}
+                                                        </span>
                                                     )}
-                                                </Box>
+                                                </div>
+                                                {(match.team1Score !== undefined && match.team2Score !== undefined) ? (
+                                                    <div className="bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white px-2 py-1 rounded text-sm font-bold">
+                                                        {match.team1Score} - {match.team2Score}
+                                                    </div>
+                                                ) : (
+                                                    <div className="bg-gray-50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 px-2 py-1 rounded text-xs">
+                                                        Score
+                                                    </div>
+                                                )}
+                                            </div>
 
-                                                <Grid container alignItems="center">
-                                                    <Grid item xs={5}>
-                                                        <Box sx={{ textAlign: 'center' }}>
-                                                            <Typography variant="body1" fontWeight="bold">{getPlayerName(match.team1[0])}</Typography>
-                                                            <Typography variant="body1" fontWeight="bold">{getPlayerName(match.team1[1])}</Typography>
-                                                        </Box>
-                                                    </Grid>
-                                                    <Grid item xs={2} sx={{ textAlign: 'center' }}>
-                                                        <Typography variant="h6" color="text.secondary">VS</Typography>
-                                                    </Grid>
-                                                    <Grid item xs={5}>
-                                                        <Box sx={{ textAlign: 'center' }}>
-                                                            <Typography variant="body1" fontWeight="bold">{getPlayerName(match.team2[0])}</Typography>
-                                                            <Typography variant="body1" fontWeight="bold">{getPlayerName(match.team2[1])}</Typography>
-                                                        </Box>
-                                                    </Grid>
-                                                </Grid>
+                                            {/* Players */}
+                                            <div className="flex items-center justify-between">
+                                                {/* Team 1 */}
+                                                <div className="flex-1 text-center">
+                                                    <div className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
+                                                        {getPlayerName(match.team1[0])}
+                                                    </div>
+                                                    <div className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
+                                                        {getPlayerName(match.team1[1])}
+                                                    </div>
+                                                </div>
 
-                                                {/* Betting Button */}
-                                                {week.bettingDeadline && new Date() < new Date(week.bettingDeadline) && match.team1Score === undefined && week.status !== 'COMPLETED' && (
-                                                    <Button
-                                                        variant="outlined"
-                                                        size="small"
-                                                        fullWidth
-                                                        sx={{ mt: 2 }}
+                                                {/* VS Badge */}
+                                                <div className="mx-2 flex-shrink-0">
+                                                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-xs font-bold">
+                                                        VS
+                                                    </span>
+                                                </div>
+
+                                                {/* Team 2 */}
+                                                <div className="flex-1 text-center">
+                                                    <div className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
+                                                        {getPlayerName(match.team2[0])}
+                                                    </div>
+                                                    <div className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
+                                                        {getPlayerName(match.team2[1])}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Betting Button */}
+                                            {week.bettingDeadline && new Date() < new Date(week.bettingDeadline) && match.team1Score === undefined && week.status !== 'COMPLETED' && (
+                                                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 flex justify-center">
+                                                    <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             handleBetClick(match);
                                                         }}
+                                                        className="w-full text-center text-xs font-bold text-primary hover:text-primary-dark py-1 rounded hover:bg-primary/5 transition-colors"
                                                     >
                                                         Place Bet
-                                                    </Button>
-                                                )}
-                                            </Paper>
-                                        </Grid>
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
                                     ))}
-                                </Grid>
-                            </Box>
+                                </div>
+                            </div>
                         ));
                     })()}
-                </Box>
 
-                {matches.length === 0 && (
-                    <Typography color="text.secondary">No matches generated yet.</Typography>
-                )}
+                    {matches.length === 0 && (
+                        <div className="text-center py-10 bg-surface-light dark:bg-surface-dark rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
+                            <p className="text-gray-500 dark:text-gray-400">No matches generated yet.</p>
+                            {isAdmin && (
+                                <p className="text-sm text-gray-400 mt-1">Use the Generate button above to create a schedule.</p>
+                            )}
+                        </div>
+                    )}
+                </div>
 
                 <ScoreModal
                     open={scoreModalOpen}
@@ -447,8 +467,8 @@ const WeekDetails = () => {
                     members={players}
                     matches={matches}
                 />
-            </Box>
-        </Box>
+            </div>
+        </div>
     );
 };
 

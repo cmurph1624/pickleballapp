@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Box, List, ListItem, ListItemText, Divider, Chip } from '@mui/material';
-import { collection, query, where, orderBy, getDocs, documentId } from 'firebase/firestore';
+import { collection, query, where, getDocs, documentId } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const TransactionHistoryModal = ({ open, onClose, userId, userEmail }) => {
@@ -14,7 +13,6 @@ const TransactionHistoryModal = ({ open, onClose, userId, userEmail }) => {
                 setTransactions([]);
                 try {
                     // 1. Fetch Bets
-                    // 1. Fetch Bets
                     const betsQuery = query(
                         collection(db, 'bets'),
                         where('userId', '==', userId)
@@ -22,7 +20,7 @@ const TransactionHistoryModal = ({ open, onClose, userId, userEmail }) => {
                     const betsSnap = await getDocs(betsQuery);
                     let bets = betsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-                    // Sort in memory to avoid needing a composite index
+                    // Sort in memory
                     bets.sort((a, b) => b.createdAt.seconds - a.createdAt.seconds);
 
                     if (bets.length === 0) {
@@ -30,16 +28,9 @@ const TransactionHistoryModal = ({ open, onClose, userId, userEmail }) => {
                         return;
                     }
 
-                    // 2. Fetch Related Weeks (to get League Name and Match Details)
+                    // 2. Fetch Related Weeks
                     const weekIds = [...new Set(bets.map(b => b.weekId))];
-                    // Firestore 'in' limit is 10. If > 10, we'd need to batch or fetch individually.
-                    // For now, let's fetch individually to be safe and simple given likely scale.
-                    // Or fetch all weeks if list is small? Fetching individually is safer for now.
-
                     const weeksData = {};
-                    const playersData = {}; // Cache players if needed, but match usually has names? 
-                    // Wait, match in Week doc only has IDs usually. We need player names.
-                    // Let's fetch all players once to resolve names.
 
                     const playersSnap = await getDocs(collection(db, 'players'));
                     const playersMap = {};
@@ -47,12 +38,7 @@ const TransactionHistoryModal = ({ open, onClose, userId, userEmail }) => {
                         playersMap[doc.id] = `${doc.data().firstName} ${doc.data().lastName}`;
                     });
 
-                    // Fetch Weeks
-                    for (const wId of weekIds) {
-                        // We could use getDoc here
-                        // Optimization: Promise.all
-                    }
-                    // Let's use Promise.all for weeks
+                    // Fetch Weeks (using Promise.all for simplicity/performance in this context)
                     const weekDocs = await Promise.all(weekIds.map(id => getDocs(query(collection(db, 'weeks'), where(documentId(), '==', id)))));
 
                     weekDocs.forEach(snap => {
@@ -76,22 +62,22 @@ const TransactionHistoryModal = ({ open, onClose, userId, userEmail }) => {
 
                         // Determine P&L display
                         let pnl = 0;
-                        let pnlColor = 'text.secondary';
+                        let pnlColor = 'text-gray-500';
 
                         if (bet.status === 'WON') {
                             pnl = bet.amount; // Profit is equal to amount (1:1)
-                            pnlColor = 'success.main';
+                            pnlColor = 'text-green-500';
                         } else if (bet.status === 'LOST') {
                             pnl = -bet.amount;
-                            pnlColor = 'error.main';
+                            pnlColor = 'text-red-500';
                         } else if (bet.status === 'PUSH') {
                             pnl = 0;
-                            pnlColor = 'warning.main';
+                            pnlColor = 'text-yellow-500';
                         }
 
                         return {
                             ...bet,
-                            leagueName: week?.name || 'Unknown Week', // Week name usually acts as context
+                            leagueName: week?.name || 'Unknown Week',
                             matchDesc,
                             pnl,
                             pnlColor
@@ -111,65 +97,88 @@ const TransactionHistoryModal = ({ open, onClose, userId, userEmail }) => {
         fetchHistory();
     }, [open, userId]);
 
+    if (!open) return null;
+
     return (
-        <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-            <DialogTitle>Transaction History: {userEmail}</DialogTitle>
-            <DialogContent>
-                {loading ? (
-                    <Typography>Loading history...</Typography>
-                ) : transactions.length === 0 ? (
-                    <Typography>No betting history found.</Typography>
-                ) : (
-                    <List>
-                        {transactions.map((tx, index) => (
-                            <React.Fragment key={tx.id}>
-                                <ListItem alignItems="flex-start">
-                                    <ListItemText
-                                        primary={
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                <Typography variant="subtitle1" fontWeight="bold">
-                                                    {tx.leagueName}
-                                                </Typography>
-                                                <Typography variant="subtitle1" fontWeight="bold" color={tx.pnlColor}>
-                                                    {tx.status === 'OPEN' ? 'PENDING' :
-                                                        tx.pnl > 0 ? `+$${tx.pnl}` :
-                                                            tx.pnl < 0 ? `-$${Math.abs(tx.pnl)}` : `$0`}
-                                                </Typography>
-                                            </Box>
-                                        }
-                                        secondary={
-                                            <Box component="span">
-                                                <Typography variant="body2" color="text.primary" display="block">
-                                                    {tx.matchDesc}
-                                                </Typography>
-                                                <Typography variant="body2" display="block">
-                                                    Pick: {tx.teamPicked === 1 ? 'Team 1' : 'Team 2'}
-                                                    {tx.spreadAtTimeOfBet !== 0 && ` (${tx.teamPicked === tx.favoriteTeamAtTimeOfBet ? '-' : '+'}${tx.spreadAtTimeOfBet})`}
-                                                    {' '}| Wager: ${tx.amount}
-                                                </Typography>
-                                                <Typography variant="caption" color="text.secondary">
-                                                    {new Date(tx.createdAt.seconds * 1000).toLocaleDateString()}
-                                                </Typography>
-                                                <Chip
-                                                    label={tx.status}
-                                                    size="small"
-                                                    color={tx.status === 'WON' ? 'success' : tx.status === 'LOST' ? 'error' : tx.status === 'OPEN' ? 'default' : 'warning'}
-                                                    sx={{ ml: 1, height: 20, fontSize: '0.7rem' }}
-                                                />
-                                            </Box>
-                                        }
-                                    />
-                                </ListItem>
-                                {index < transactions.length - 1 && <Divider component="li" />}
-                            </React.Fragment>
-                        ))}
-                    </List>
-                )}
-            </DialogContent>
-            <DialogActions>
-                <Button onClick={onClose}>Close</Button>
-            </DialogActions>
-        </Dialog>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+            <div
+                className="bg-surface-light dark:bg-surface-dark w-full max-w-2xl rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col max-h-[80vh]"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                        Transaction History
+                        <span className="block text-sm font-normal text-gray-500 dark:text-gray-400 mt-1">{userEmail}</span>
+                    </h2>
+                    <button
+                        onClick={onClose}
+                        className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 transition-colors"
+                    >
+                        <span className="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6">
+                    {loading ? (
+                        <div className="text-center py-8 text-gray-500 dark:text-gray-400">Loading history...</div>
+                    ) : transactions.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500 dark:text-gray-400">No betting history found.</div>
+                    ) : (
+                        <div className="space-y-4">
+                            {transactions.map((tx) => (
+                                <div key={tx.id} className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-700">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="font-bold text-gray-900 dark:text-white">
+                                            {tx.leagueName}
+                                        </div>
+                                        <div className={`font-bold ${tx.status === 'OPEN' ? 'text-gray-500' : tx.pnlColor}`}>
+                                            {tx.status === 'OPEN' ? 'PENDING' :
+                                                tx.pnl > 0 ? `+$${tx.pnl}` :
+                                                    tx.pnl < 0 ? `-$${Math.abs(tx.pnl)}` : `$0`}
+                                        </div>
+                                    </div>
+
+                                    <div className="text-sm text-gray-600 dark:text-gray-300 mb-2">
+                                        {tx.matchDesc}
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                        <div className="text-gray-500 dark:text-gray-400">
+                                            <span className="font-medium">Pick:</span> Team {tx.teamPicked === 1 ? '1' : '2'}
+                                            {tx.spreadAtTimeOfBet !== 0 && ` (${tx.teamPicked === tx.favoriteTeamAtTimeOfBet ? '-' : '+'}${tx.spreadAtTimeOfBet})`}
+                                            <span className="mx-2">•</span>
+                                            <span className="font-medium">Wager:</span> ${tx.amount}
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-gray-400">
+                                                {new Date(tx.createdAt.seconds * 1000).toLocaleDateString()}
+                                            </span>
+                                            <span className={`px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${tx.status === 'WON' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
+                                                    tx.status === 'LOST' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
+                                                        tx.status === 'OPEN' ? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300' :
+                                                            'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                                                }`}>
+                                                {tx.status}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="p-4 border-t border-gray-100 dark:border-gray-700 flex justify-end">
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition"
+                    >
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 };
 
