@@ -1,23 +1,65 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
 import ClubDashboard from './ClubDashboard';
 import UserDashboard from './UserDashboard';
-// Reusing ClubDashboard as the "No Club / Create Club" view, 
-// but if user HAS clubs, we redirect.
-
+import ClaimPlayer from './ClaimPlayer';
 import Layout from '../components/Layout';
 
 const HomeRedirect = () => {
     const { currentUser } = useAuth();
-    // If logged in, show User Dashboard (home base) - NEW DESIGN (No Layout Wrapper)
-    if (currentUser) {
-        return <UserDashboard />;
+    const [checkingLink, setCheckingLink] = useState(true);
+    const [isLinked, setIsLinked] = useState(false);
+
+    useEffect(() => {
+        const checkPlayerLink = async () => {
+            if (!currentUser) {
+                setCheckingLink(false);
+                return;
+            }
+
+            try {
+                const playersRef = collection(db, 'players');
+                // Query for a player document where linkedUserId matches current user
+                const q = query(playersRef, where('linkedUserId', '==', currentUser.uid), limit(1));
+                const snapshot = await getDocs(q);
+
+                if (!snapshot.empty) {
+                    setIsLinked(true);
+                } else {
+                    setIsLinked(false);
+                }
+            } catch (error) {
+                console.error("Error checking player link:", error);
+                // Fallback to not linked to be safe, or handle error
+            } finally {
+                setCheckingLink(false);
+            }
+        };
+
+        checkPlayerLink();
+    }, [currentUser]);
+
+    if (checkingLink && currentUser) {
+        return (
+            <div className="flex justify-center items-center min-h-screen bg-white dark:bg-gray-900">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+            </div>
+        );
     }
 
-    // If not logged in, show the generic landing / club selector - OLD DESIGN (Needs Layout)
+    // If logged in
+    if (currentUser) {
+        // If linked, go to Dashboard
+        if (isLinked) {
+            return <UserDashboard />;
+        }
+        // If not linked, go to Claim Player screen
+        return <ClaimPlayer />;
+    }
+
+    // If not logged in, show the generic landing / club selector
     return (
         <Layout>
             <ClubDashboard />
