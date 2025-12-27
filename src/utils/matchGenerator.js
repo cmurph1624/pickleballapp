@@ -63,7 +63,7 @@ export const generateMatches = (players, gamesPerPlayer, mode = "STRICT_SOCIAL")
     const evaluateSchedule = (matches, players) => {
         const stats = {};
         players.forEach(p => {
-            stats[p.id] = { partners: {}, opponents: {} };
+            stats[p.id] = { partners: {}, opponents: {}, gamesPlayed: 0 };
         });
 
         let totalPenalty = 0;
@@ -74,6 +74,12 @@ export const generateMatches = (players, gamesPerPlayer, mode = "STRICT_SOCIAL")
             const p2 = players.find(p => p.id === m.team1[1]);
             const p3 = players.find(p => p.id === m.team2[0]);
             const p4 = players.find(p => p.id === m.team2[1]);
+
+            // Track Games Played
+            stats[p1.id].gamesPlayed++;
+            stats[p2.id].gamesPlayed++;
+            stats[p3.id].gamesPlayed++;
+            stats[p4.id].gamesPlayed++;
 
             // Track Partners
             stats[p1.id].partners[p2.id] = (stats[p1.id].partners[p2.id] || 0) + 1;
@@ -97,6 +103,12 @@ export const generateMatches = (players, gamesPerPlayer, mode = "STRICT_SOCIAL")
 
         // Calculate Global Penalties
         players.forEach(p => {
+            // Check for Missing Games (Critical for Competitive)
+            if (stats[p.id].gamesPlayed < gamesPerPlayer) {
+                // Penalty needs to be higher than repeatPartner (10000) to ensure we prefer repeats over gaps
+                totalPenalty += (gamesPerPlayer - stats[p.id].gamesPlayed) * 50000;
+            }
+
             // Missed Partners & Repeat Partners
             players.forEach(other => {
                 if (p.id === other.id) return;
@@ -104,10 +116,7 @@ export const generateMatches = (players, gamesPerPlayer, mode = "STRICT_SOCIAL")
                 const partnerCount = stats[p.id].partners[other.id] || 0;
 
                 if (partnerCount === 0) {
-                    // Missed partner (divided by 2 because we count it for both sides, loop handles each player)
-                    // But we want to penalize the SCHEDULE state.
-                    // If A missed B, A gets penalty. B gets penalty. Total = 2 * penalty.
-                    // This aligns with "Score: Calculate a 'Penalty Score' for each schedule".
+                    // Missed partner
                     totalPenalty += currentConfig.missedPartner;
                 } else if (partnerCount > 1) {
                     // Repeat partner

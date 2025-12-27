@@ -1,9 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import {
-    Dialog, DialogTitle, DialogContent, DialogActions,
-    Button, Tabs, Tab, Box, Typography,
-    Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper
-} from '@mui/material';
 
 const MatchFrequencyModal = ({ open, onClose, members = [], matches = [] }) => {
     const [tab, setTab] = useState(0);
@@ -49,84 +44,130 @@ const MatchFrequencyModal = ({ open, onClose, members = [], matches = [] }) => {
     }, [members, matches]);
 
     const getCellColor = (value, isPartner) => {
-        if (value === 0) return '#f8d7da'; // Redish for 0
-        if (value === 1) return '#d1e7dd'; // Greenish for 1 (Ideal)
-        if (value > 1) return '#fff3cd'; // Yellowish for > 1 (Repeat)
-        return 'inherit';
+        if (value === 0) return 'bg-red-100 dark:bg-red-900/30 text-red-900 dark:text-red-300'; // 0
+        if (value === 1) return 'bg-green-100 dark:bg-green-900/30 text-green-900 dark:text-green-300'; // 1 (Ideal)
+        if (value > 1) return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-900 dark:text-yellow-300'; // > 1 (Repeat)
+        return 'text-gray-900 dark:text-gray-300';
     };
 
+    if (!open) return null;
+
     const renderMatrix = (matrix, isPartner) => (
-        <TableContainer component={Paper} elevation={0} variant="outlined">
-            <Table size="small">
-                <TableHead>
-                    <TableRow>
-                        <TableCell sx={{ fontWeight: 'bold', bgcolor: 'grey.100' }}>vs</TableCell>
+        <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+            <table className="w-full text-xs sm:text-sm border-collapse">
+                <thead>
+                    <tr>
+                        <th className="p-2 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold sticky left-0 z-10 w-32 border-r-2 border-r-gray-300 dark:border-r-gray-600">vs</th>
                         {players.map(p => (
-                            <TableCell key={p.id} align="center" sx={{ fontWeight: 'bold', bgcolor: 'grey.100' }}>
-                                {p.firstName.substring(0, 3)}
-                            </TableCell>
+                            <th key={p.id} className="p-2 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold min-w-[3rem] text-center">
+                                {p.firstName}
+                            </th>
                         ))}
-                    </TableRow>
-                </TableHead>
-                <TableBody>
+                    </tr>
+                </thead>
+                <tbody>
                     {players.map((p1, rIdx) => (
-                        <TableRow key={p1.id}>
-                            <TableCell component="th" scope="row" sx={{ fontWeight: 'bold', bgcolor: 'grey.50' }}>
+                        <tr key={p1.id}>
+                            <th className="p-2 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold text-left sticky left-0 z-10 whitespace-nowrap border-r-2 border-r-gray-300 dark:border-r-gray-600 w-32">
                                 {p1.firstName} {p1.lastName.substring(0, 1)}.
-                            </TableCell>
+                            </th>
                             {players.map((p2, cIdx) => {
                                 if (rIdx === cIdx) {
-                                    return <TableCell key={p2.id} sx={{ bgcolor: 'grey.200' }} />;
+                                    return <td key={p2.id} className="p-2 border border-gray-200 dark:border-gray-700 bg-gray-200 dark:bg-gray-800" />;
                                 }
                                 const val = matrix[rIdx][cIdx];
+                                const colorClass = getCellColor(val, isPartner);
                                 return (
-                                    <TableCell
+                                    <td
                                         key={p2.id}
-                                        align="center"
-                                        sx={{ bgcolor: getCellColor(val, isPartner) }}
+                                        className={`p-2 border border-gray-200 dark:border-gray-700 text-center font-medium ${colorClass}`}
                                     >
                                         {val}
-                                    </TableCell>
+                                    </td>
                                 );
                             })}
-                        </TableRow>
+                        </tr>
                     ))}
-                </TableBody>
-            </Table>
-        </TableContainer>
+                </tbody>
+            </table>
+        </div>
     );
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-            <DialogTitle>Match Analysis</DialogTitle>
-            <DialogContent>
-                <Tabs value={tab} onChange={(e, v) => setTab(v)} sx={{ mb: 2 }}>
-                    <Tab label="Partner Frequency" />
-                    <Tab label="Opponent Frequency" />
-                </Tabs>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+            <div
+                className="bg-surface-light dark:bg-surface-dark w-full max-w-4xl rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col max-h-[90vh]"
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Header */}
+                <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-surface-light dark:bg-surface-dark bg-gray-50 dark:bg-gray-800/10">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                        Match Analysis
+                    </h2>
+                    <button
+                        onClick={onClose}
+                        className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 transition-colors"
+                    >
+                        <span className="material-symbols-outlined">close</span>
+                    </button>
+                </div>
 
-                {tab === 0 && (
-                    <Box>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                            Ideal: 1 (Green). 0 (Red) means they haven't partnered. &gt;1 (Yellow) means repeat partners.
-                        </Typography>
-                        {renderMatrix(partnerMatrix, true)}
-                    </Box>
-                )}
+                {/* Content */}
+                <div className="flex flex-col flex-1 overflow-hidden p-6 gap-6">
+                    {/* Tabs */}
+                    <div className="flex border-b border-gray-200 dark:border-gray-700">
+                        <button
+                            onClick={() => setTab(0)}
+                            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${tab === 0
+                                ? 'border-primary text-primary'
+                                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                                }`}
+                        >
+                            Partner Frequency
+                        </button>
+                        <button
+                            onClick={() => setTab(1)}
+                            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${tab === 1
+                                ? 'border-primary text-primary'
+                                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                                }`}
+                        >
+                            Opponent Frequency
+                        </button>
+                    </div>
 
-                {tab === 1 && (
-                    <Box>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                            Ideal: 1+ (Green). 0 (Red) means they haven't played against each other.
-                        </Typography>
-                        {renderMatrix(opponentMatrix, false)}
-                    </Box>
-                )}
-            </DialogContent>
-            <DialogActions>
-                <Button onClick={onClose}>Close</Button>
-            </DialogActions>
-        </Dialog >
+                    <div className="flex-1 overflow-y-auto">
+                        {tab === 0 && (
+                            <div className="space-y-4">
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    <span className="font-bold text-green-600 dark:text-green-400">Green (1)</span>: Ideal. <span className="font-bold text-red-500 dark:text-red-400">Red (0)</span>: Never partnered. <span className="font-bold text-yellow-600 dark:text-yellow-400">Yellow ({'>'}1)</span>: Repeat partners.
+                                </p>
+                                {renderMatrix(partnerMatrix, true)}
+                            </div>
+                        )}
+
+                        {tab === 1 && (
+                            <div className="space-y-4">
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    <span className="font-bold text-green-600 dark:text-green-400">Green (1+)</span>: Played against. <span className="font-bold text-red-500 dark:text-red-400">Red (0)</span>: Never played against.
+                                </p>
+                                {renderMatrix(opponentMatrix, false)}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div className="p-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-gray-800/50">
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    >
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 };
 
