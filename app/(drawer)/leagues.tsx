@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { collection, deleteDoc, doc, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { Alert, FlatList, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Platform, TouchableOpacity, View } from 'react-native';
 import { ActivityIndicator, Avatar, FAB, IconButton, SegmentedButtons, Switch, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import LeagueModal from '../../components/LeagueModal';
@@ -69,36 +69,77 @@ export default function LeaguesScreen() {
         else setSessionModalVisible(true);
     };
 
-    const handleDelete = (id: string, type: 'leagues' | 'sessions') => {
-        Alert.alert(
-            "Delete Item",
-            `Are you sure you want to delete this?`,
-            [
-                { text: "Cancel", style: "cancel" },
-                {
-                    text: "Delete",
-                    style: "destructive",
-                    onPress: async () => {
-                        try {
-                            await deleteDoc(doc(db, type, id));
-                        } catch (error) {
-                            console.error("Error deleting:", error);
+    const handleDelete = async (id: string, type: 'leagues' | 'sessions') => {
+        if (Platform.OS === 'web') {
+            if (window.confirm("Are you sure you want to delete this?")) {
+                try {
+                    await deleteDoc(doc(db, type, id));
+                } catch (error) {
+                    console.error("Error deleting:", error);
+                }
+            }
+        } else {
+            Alert.alert(
+                "Delete Item",
+                `Are you sure you want to delete this?`,
+                [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                        text: "Delete",
+                        style: "destructive",
+                        onPress: async () => {
+                            try {
+                                await deleteDoc(doc(db, type, id));
+                            } catch (error) {
+                                console.error("Error deleting:", error);
+                            }
                         }
                     }
+                ]
+            );
+        }
+    };
+
+    const handleArchive = async (id: string) => {
+        if (Platform.OS === 'web') {
+            if (window.confirm("Are you sure you want to archive this league? It will be hidden from the main list.")) {
+                try {
+                    await updateDoc(doc(db, 'leagues', id), { isArchived: true });
+                } catch (error) {
+                    console.error("Error archiving:", error);
                 }
-            ]
-        );
+            }
+        } else {
+            Alert.alert(
+                "Archive League",
+                "Are you sure you want to archive this league? It will be hidden from the main list.",
+                [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                        text: "Archive",
+                        onPress: async () => {
+                            try {
+                                await updateDoc(doc(db, 'leagues', id), { isArchived: true });
+                            } catch (error) {
+                                console.error("Error archiving:", error);
+                            }
+                        }
+                    }
+                ]
+            );
+        }
     };
 
     const getData = () => {
         if (view === 'leagues') {
+            const activeLeagues = leagues.filter(l => !l.isArchived);
             if (showActiveOnly) {
                 // Filter leagues where endDate is not in the past (or hasn't ended yet)
                 // Assuming YYYY-MM-DD format strings
                 const today = new Date().toISOString().split('T')[0];
-                return leagues.filter(l => l.endDate >= today);
+                return activeLeagues.filter(l => l.endDate >= today);
             }
-            return leagues;
+            return activeLeagues;
         } else {
             // Sessions
             if (showActiveOnly) {
@@ -122,51 +163,88 @@ export default function LeaguesScreen() {
         });
     };
 
-    const renderItem = ({ item }: { item: any }) => (
-        <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => view === 'leagues' ? handleLeaguePress(item) : handleSessionPress(item)}
-        >
-            <View className="bg-slate-800 p-4 rounded-xl mb-3 border border-slate-700 mx-4">
-                <View className="flex-row justify-between items-start">
-                    <View className="flex-1">
-                        <View className="flex-row justify-between items-center mb-1">
-                            <Text className="text-blue-400 font-bold uppercase text-lg">{item.name}</Text>
-                            {canEdit && (
-                                <IconButton
-                                    icon="delete"
-                                    iconColor="#64748b" // slate-500
-                                    size={20}
-                                    style={{ margin: 0 }}
-                                    onPress={() => handleDelete(item.id, view as 'leagues' | 'sessions')}
-                                />
-                            )}
-                        </View>
+    const getLeagueStatus = (league: any) => {
+        if (!league.startDate || !league.endDate) return null;
+        const today = new Date().toISOString().split('T')[0];
+        if (league.endDate < today) return { label: 'Completed', color: 'text-slate-400', bg: 'bg-slate-700/50', border: 'border-slate-600' };
+        if (league.startDate > today) return { label: 'Upcoming', color: 'text-blue-400', bg: 'bg-blue-900/30', border: 'border-blue-800' };
+        return { label: 'Active', color: 'text-emerald-400', bg: 'bg-emerald-900/30', border: 'border-emerald-800' };
+    };
 
-                        <Text className="text-slate-400 text-xs mb-2">
-                            {view === 'leagues'
-                                ? `${item.startDate || 'No Date'} - ${item.endDate || 'No Date'}`
-                                : new Date(item.scheduledDate).toLocaleDateString()
-                            }
-                        </Text>
+    const renderItem = ({ item }: { item: any }) => {
+        const status = view === 'leagues' ? getLeagueStatus(item) : null;
 
-                        <View className="flex-row gap-2 mt-1">
-                            <View className="bg-slate-700 rounded-full px-3 py-1 flex-row items-center">
-                                <Avatar.Icon size={16} icon="account-group" color="#94a3b8" style={{ backgroundColor: 'transparent' }} />
-                                <Text className="text-slate-300 text-xs ml-1 font-medium">{item.players?.length || 0} Players</Text>
+        return (
+            <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => view === 'leagues' ? handleLeaguePress(item) : handleSessionPress(item)}
+            >
+                <View className="bg-slate-800 p-4 rounded-xl mb-3 border border-slate-700 mx-4">
+                    <View className="flex-row justify-between items-start">
+                        <View className="flex-1">
+                            <View className="flex-row justify-between items-center mb-1">
+                                <Text className="text-blue-400 font-bold uppercase text-lg flex-1 mr-2" numberOfLines={1}>{item.name}</Text>
+                                {canEdit && (
+                                    <View className="flex-row">
+                                        <IconButton
+                                            icon="pencil"
+                                            iconColor="#5b7cfa"
+                                            size={20}
+                                            style={{ margin: 0 }}
+                                            onPress={() => handleEdit(item)}
+                                        />
+                                        {view === 'leagues' && (
+                                            <IconButton
+                                                icon="archive"
+                                                iconColor="#f59e0b" // amber-500
+                                                size={20}
+                                                style={{ margin: 0 }}
+                                                onPress={() => handleArchive(item.id)}
+                                            />
+                                        )}
+                                        <IconButton
+                                            icon="delete"
+                                            iconColor="#ef4444" // red-500
+                                            size={20}
+                                            style={{ margin: 0 }}
+                                            onPress={() => handleDelete(item.id, view as 'leagues' | 'sessions')}
+                                        />
+                                    </View>
+                                )}
                             </View>
-                            {item.status === 'COMPLETED' && (
-                                <View className="bg-emerald-900/50 border border-emerald-800 rounded-full px-3 py-1 flex-row items-center">
-                                    <Avatar.Icon size={16} icon="check" color="#34d399" style={{ backgroundColor: 'transparent' }} />
-                                    <Text className="text-emerald-400 text-xs ml-1 font-medium">Done</Text>
+
+                            <Text className="text-slate-400 text-xs mb-2">
+                                {view === 'leagues'
+                                    ? `${item.startDate || 'No Date'} - ${item.endDate || 'No Date'}`
+                                    : new Date(item.scheduledDate).toLocaleDateString()
+                                }
+                            </Text>
+
+                            <View className="flex-row gap-2 mt-1 flex-wrap">
+                                <View className="bg-slate-700 rounded-full px-3 py-1 flex-row items-center border border-slate-600">
+                                    <Avatar.Icon size={16} icon="account-group" color="#94a3b8" style={{ backgroundColor: 'transparent' }} />
+                                    <Text className="text-slate-300 text-xs ml-1 font-bold">{item.players?.length || 0} Players</Text>
                                 </View>
-                            )}
+
+                                {status && (
+                                    <View className={`${status.bg} border ${status.border} rounded-full px-3 py-1 flex-row items-center`}>
+                                        <Text className={`${status.color} text-xs font-bold`}>{status.label}</Text>
+                                    </View>
+                                )}
+
+                                {item.status === 'COMPLETED' && (
+                                    <View className="bg-emerald-900/50 border border-emerald-800 rounded-full px-3 py-1 flex-row items-center">
+                                        <Avatar.Icon size={16} icon="check" color="#34d399" style={{ backgroundColor: 'transparent' }} />
+                                        <Text className="text-emerald-400 text-xs ml-1 font-bold">Done</Text>
+                                    </View>
+                                )}
+                            </View>
                         </View>
                     </View>
                 </View>
-            </View>
-        </TouchableOpacity>
-    );
+            </TouchableOpacity>
+        );
+    };
 
     if (!clubId) {
         return (

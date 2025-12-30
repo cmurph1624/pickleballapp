@@ -1,6 +1,7 @@
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { addDoc, collection, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, View } from 'react-native';
+import { Alert, Platform, ScrollView, TouchableOpacity, View } from 'react-native';
 import { Button, Checkbox, Modal, Portal, Text, TextInput, useTheme } from 'react-native-paper';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
@@ -25,6 +26,12 @@ const SessionModal = ({ visible, onDismiss, session, league, clubId }: SessionMo
     const [bettingDeadline, setBettingDeadline] = useState('');
     const [scheduledDate, setScheduledDate] = useState('');
     const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
+
+    // Date Picker State
+    const [showPicker, setShowPicker] = useState(false);
+    const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date');
+    const [pickerField, setPickerField] = useState<'scheduled' | 'deadline'>('scheduled');
+    const [tempDate, setTempDate] = useState(new Date());
 
     // Data State
     const [leaguePlayers, setLeaguePlayers] = useState<any[]>([]);
@@ -137,6 +144,60 @@ const SessionModal = ({ visible, onDismiss, session, league, clubId }: SessionMo
         }
     };
 
+    const onDateChange = (event: any, selectedDate?: Date) => {
+        if (event.type === 'dismissed') {
+            setShowPicker(false);
+            return;
+        }
+
+        const currentDate = selectedDate || tempDate;
+
+        if (Platform.OS === 'android') {
+            setShowPicker(false);
+            if (pickerMode === 'date') {
+                setTempDate(currentDate);
+                setPickerMode('time');
+                setShowPicker(true); // Re-open for time
+            } else {
+                // Finalize
+                const isoString = currentDate.toISOString(); // Or keep as Date object? Keeping as string to match current logic
+                if (pickerField === 'scheduled') setScheduledDate(isoString);
+                else setBettingDeadline(isoString);
+            }
+        } else {
+            // iOS Logic (can be different, but keeping 2-step for consistency or using datetime mode)
+            // Using simple logic for now: Just close on confirm if using a modal approach,
+            // but RNDTP on iOS is usually inline.
+            // Let's assume standard behavior: update state, user manually closes or we handle simple logic.
+            // For inline/spinner, we usually need a Done button.
+            // For now, let's implement a simple "Done" button logic by storing temp until confirmed?
+            // Or instant update.
+            // To keep it simple and consistent with the user request "pop up":
+            // iOS typically needs a modal wrapper if not inline. 
+            // Let's implement the Android-like flow flow or just standard iOS inline.
+            // Actually, the user asked for "pop up", and RNDTP on iOS is inline by default unless in a modal.
+            // Since we are IN a modal, we can render it conditionally.
+            const isoString = currentDate.toISOString();
+            if (pickerField === 'scheduled') setScheduledDate(isoString);
+            else setBettingDeadline(isoString);
+            // On iOS, we don't automatically close/switch usually without custom logic.
+            // Just updating state for now.
+            setTempDate(currentDate);
+        }
+    };
+
+    const showMode = (currentMode: 'date' | 'time', field: 'scheduled' | 'deadline') => {
+        setPickerField(field);
+        setPickerMode(currentMode);
+
+        // Parse existing date or use now
+        const currentStr = field === 'scheduled' ? scheduledDate : bettingDeadline;
+        const d = currentStr ? new Date(currentStr) : new Date();
+        setTempDate(isNaN(d.getTime()) ? new Date() : d);
+
+        setShowPicker(true);
+    };
+
     const inputTheme = {
         colors: {
             background: '#1e293b',
@@ -146,6 +207,12 @@ const SessionModal = ({ visible, onDismiss, session, league, clubId }: SessionMo
             primary: '#5b7cfa',
             error: '#ef4444'
         }
+    };
+
+    // Helper to format date for display
+    const formatDate = (isoStr: string) => {
+        if (!isoStr) return '';
+        return new Date(isoStr).toLocaleString([], { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
     };
 
     return (
@@ -201,29 +268,74 @@ const SessionModal = ({ visible, onDismiss, session, league, clubId }: SessionMo
                         theme={inputTheme}
                     />
 
-                    <TextInput
-                        label="Scheduled Date (ISO string for now)"
-                        value={scheduledDate}
-                        onChangeText={setScheduledDate}
-                        mode="outlined"
-                        placeholder="2024-01-01T10:00:00"
-                        placeholderTextColor="#64748b"
-                        className="mb-2 bg-slate-800"
-                        textColor="white"
-                        theme={inputTheme}
-                    />
+                    <TouchableOpacity onPress={() => showMode('date', 'scheduled')}>
+                        <View pointerEvents="none">
+                            <TextInput
+                                label="Scheduled Date"
+                                value={formatDate(scheduledDate)}
+                                mode="outlined"
+                                placeholder="Select Date & Time"
+                                placeholderTextColor="#64748b"
+                                className="mb-2 bg-slate-800"
+                                textColor="white"
+                                theme={inputTheme}
+                                editable={false}
+                                right={<TextInput.Icon icon="calendar" color="#94a3b8" />}
+                            />
+                        </View>
+                    </TouchableOpacity>
 
-                    <TextInput
-                        label="Betting Deadline (ISO string)"
-                        value={bettingDeadline}
-                        onChangeText={setBettingDeadline}
-                        mode="outlined"
-                        placeholder="2024-01-01T09:00:00"
-                        placeholderTextColor="#64748b"
-                        className="mb-4 bg-slate-800"
-                        textColor="white"
-                        theme={inputTheme}
-                    />
+                    <TouchableOpacity onPress={() => showMode('date', 'deadline')}>
+                        <View pointerEvents="none">
+                            <TextInput
+                                label="Betting Deadline"
+                                value={formatDate(bettingDeadline)}
+                                mode="outlined"
+                                placeholder="Select Deadline"
+                                placeholderTextColor="#64748b"
+                                className="mb-4 bg-slate-800"
+                                textColor="white"
+                                theme={inputTheme}
+                                editable={false}
+                                right={<TextInput.Icon icon="clock-outline" color="#94a3b8" />}
+                            />
+                        </View>
+                    </TouchableOpacity>
+
+                    {showPicker && (Platform.OS === 'ios' ? (
+                        <View className="bg-slate-800 p-4 rounded-lg mb-4">
+                            <Text className="text-white mb-2 font-bold text-center">Select {pickerMode === 'date' ? 'Date' : 'Time'}</Text>
+                            <DateTimePicker
+                                testID="dateTimePicker"
+                                value={tempDate}
+                                mode={pickerMode} // or 'datetime'
+                                is24Hour={true}
+                                display="spinner"
+                                onChange={onDateChange}
+                                themeVariant="dark"
+                            />
+                            <Button
+                                onPress={() => {
+                                    if (pickerMode === 'date') setPickerMode('time');
+                                    else setShowPicker(false);
+                                }}
+                                mode="contained"
+                                buttonColor="#5b7cfa"
+                                className="mt-2"
+                            >
+                                {pickerMode === 'date' ? 'Next: Select Time' : 'Confirm'}
+                            </Button>
+                        </View>
+                    ) : (
+                        <DateTimePicker
+                            testID="dateTimePicker"
+                            value={tempDate}
+                            mode={pickerMode}
+                            is24Hour={true}
+                            display="default"
+                            onChange={onDateChange}
+                        />
+                    ))}
 
                     <View className="mb-4 border border-slate-700 rounded-lg p-2 max-h-48 bg-slate-800">
                         <View className="flex-row justify-between mb-2">
