@@ -3,17 +3,21 @@ import { Box, Typography } from '@mui/material';
 
 const SessionScorecard = ({ sessionName, matches, players, courts }) => {
 
+    // Calculate number of columns based on players
+    const numColumns = useMemo(() => {
+        const cols = Math.floor(players.length / 4);
+        return cols > 0 ? cols : 1;
+    }, [players]);
+
     // Group matches into rounds
     const rounds = useMemo(() => {
         if (!matches.length) return [];
-        const matchesPerRound = Math.floor(players.length / 4);
-        const chunkSize = matchesPerRound > 0 ? matchesPerRound : 1;
         const result = [];
-        for (let i = 0; i < matches.length; i += chunkSize) {
-            result.push(matches.slice(i, i + chunkSize));
+        for (let i = 0; i < matches.length; i += numColumns) {
+            result.push(matches.slice(i, i + numColumns));
         }
         return result;
-    }, [matches, players]);
+    }, [matches, numColumns]);
 
     const getPlayerName = (id) => {
         const p = players.find(player => player.id === id);
@@ -31,8 +35,7 @@ const SessionScorecard = ({ sessionName, matches, players, courts }) => {
                 <thead>
                     <tr>
                         <th style={{ width: '60px', border: '1px solid black', padding: '4px', background: '#e0e0e0' }}>Round</th>
-                        {/* Assuming max 3 matches per round for the column headers, or just generic header */}
-                        {[0, 1, 2].map(i => {
+                        {Array.from({ length: numColumns }).map((_, i) => {
                             const raw = courts && courts[i] ? courts[i] : `Match ${i + 1}`;
                             const display = /^\d+$/.test(raw) ? `Court ${raw}` : raw;
                             return <th key={i} style={{ border: '1px solid black', padding: '4px', background: '#e0e0e0' }}>{display}</th>;
@@ -45,7 +48,7 @@ const SessionScorecard = ({ sessionName, matches, players, courts }) => {
                             <td style={{ border: '1px solid black', padding: '8px', fontWeight: 'bold', textAlign: 'center' }}>
                                 Round {roundIndex + 1}
                             </td>
-                            {[0, 1, 2].map(matchIndex => {
+                            {Array.from({ length: numColumns }).map((_, matchIndex) => {
                                 const match = roundMatches[matchIndex];
                                 if (!match) {
                                     return <td key={matchIndex} style={{ border: '1px solid black', padding: '8px' }}></td>;
@@ -62,15 +65,15 @@ const SessionScorecard = ({ sessionName, matches, players, courts }) => {
                                 return (
                                     <td key={matchIndex} style={{ border: '1px solid black', padding: '4px 8px', verticalAlign: 'middle' }}>
                                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                <span style={{ fontWeight: match.favoriteTeam === 1 ? 'bold' : 'normal' }}>
+                                            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 1 }}>
+                                                <span style={{ fontWeight: match.favoriteTeam === 1 ? 'bold' : 'normal', textAlign: 'center' }}>
                                                     {p1} & {p2}
                                                 </span>
                                                 {spread1 && <span style={{ fontSize: '10px', fontWeight: 'bold' }}>{spread1}</span>}
                                             </Box>
                                             <Box sx={{ textAlign: 'center', fontSize: '9px', color: 'black', my: -0.5 }}>vs</Box>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                <span style={{ fontWeight: match.favoriteTeam === 2 ? 'bold' : 'normal' }}>
+                                            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 1 }}>
+                                                <span style={{ fontWeight: match.favoriteTeam === 2 ? 'bold' : 'normal', textAlign: 'center' }}>
                                                     {p3} & {p4}
                                                 </span>
                                                 {spread2 && <span style={{ fontSize: '10px', fontWeight: 'bold' }}>{spread2}</span>}
