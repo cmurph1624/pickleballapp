@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, limit, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
@@ -41,6 +41,7 @@ const UserDashboard = () => {
                     const validSessions = sessionsSnap.docs
                         .map(doc => ({ id: doc.id, ...doc.data() }))
                         .filter(s => {
+                            if (s.archived) return false; // Exclude archived sessions
                             if (!s.scheduledDate) return false;
                             const d = s.scheduledDate.toDate ? s.scheduledDate.toDate() : new Date(s.scheduledDate);
                             return d >= today;
@@ -86,6 +87,30 @@ const UserDashboard = () => {
             day: d.getDate(),
             time: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
+    };
+
+    const handleClearBets = async () => {
+        if (!window.confirm("Are you sure you want to delete ALL bets? This cannot be undone and will not refund wallets.")) return;
+
+        try {
+            const betsRef = collection(db, 'bets');
+            const betsSnap = await getDocs(betsRef);
+
+            if (betsSnap.empty) {
+                alert("No bets to delete.");
+                return;
+            }
+
+            const promises = betsSnap.docs.map(b => deleteDoc(doc(db, 'bets', b.id)));
+            await Promise.all(promises);
+
+            alert(`Deleted ${betsSnap.size} bets.`);
+            // Refresh bets
+            setOpenBets([]);
+        } catch (error) {
+            console.error("Error deleting bets:", error);
+            alert("Error deleting bets: " + error.message);
+        }
     };
 
     if (loading) {
@@ -178,9 +203,17 @@ const UserDashboard = () => {
                 </section>
 
                 <section className="mb-6">
-                    <div className="flex items-center gap-2 mb-3 text-gray-800 dark:text-white">
-                        <span className="material-symbols-outlined text-orange-500">emoji_events</span>
-                        <h3 className="text-lg font-bold">Active Bets ({openBets.length})</h3>
+                    <div className="flex justify-between items-center mb-3">
+                        <div className="flex items-center gap-2 text-gray-800 dark:text-white">
+                            <span className="material-symbols-outlined text-orange-500">emoji_events</span>
+                            <h3 className="text-lg font-bold">Active Bets ({openBets.length})</h3>
+                        </div>
+                        <button
+                            onClick={handleClearBets}
+                            className="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-2 py-1 rounded transition"
+                        >
+                            Delete All Bets
+                        </button>
                     </div>
                     <div className="space-y-3">
                         {openBets.length > 0 ? (

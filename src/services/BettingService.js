@@ -2,6 +2,64 @@ import { collection, query, where, getDocs, doc, runTransaction } from 'firebase
 import { db } from '../firebase';
 
 /**
+ * Pure function to calculate bet outcome.
+ * @param {object} bet - { teamPicked, spreadAtTimeOfBet, favoriteTeamAtTimeOfBet }
+ * @param {number} team1Score
+ * @param {number} team2Score
+ * @returns {string} 'WON', 'LOST', or 'PUSH'
+ */
+export const calculateBetOutcome = (bet, team1Score, team2Score) => {
+    let outcome = 'LOST';
+    const spread = bet.spreadAtTimeOfBet;
+    const favorite = bet.favoriteTeamAtTimeOfBet;
+
+    let scoreDiff = 0;
+
+    // Calculate raw score difference based on who is the favorite logic
+    // OR simpler: just calculate diff from perspective of the picked team vs opponent?
+    // Let's stick to the existing logic structure for consistency.
+
+    if (favorite === 1) {
+        scoreDiff = team1Score - team2Score;
+    } else if (favorite === 2) {
+        scoreDiff = team2Score - team1Score;
+    } else {
+        // Pick 'em (Spread 0)
+        // If user picked Team 1
+        if (bet.teamPicked === 1) {
+            scoreDiff = team1Score - team2Score;
+        } else {
+            scoreDiff = team2Score - team1Score;
+        }
+    }
+
+    // Logic for Spread Betting
+    if (spread === 0) {
+        // Pick 'em logic
+        if (scoreDiff > 0) outcome = 'WON';
+        else if (scoreDiff < 0) outcome = 'LOST';
+        else outcome = 'PUSH';
+    } else {
+        // Spread logic
+        const userPickedFavorite = (bet.teamPicked === favorite);
+
+        if (userPickedFavorite) {
+            // Must win by MORE than spread
+            if (scoreDiff > spread) outcome = 'WON';
+            else if (scoreDiff === spread) outcome = 'PUSH';
+            else outcome = 'LOST';
+        } else {
+            // User picked Underdog
+            // Covers if Favorite wins by LESS than spread, or Favorite loses (scoreDiff < 0)
+            if (scoreDiff < spread) outcome = 'WON';
+            else if (scoreDiff === spread) outcome = 'PUSH';
+            else outcome = 'LOST'; // Favorite covered
+        }
+    }
+    return outcome;
+};
+
+/**
  * Resolves all OPEN bets for a specific match based on the final score.
  * @param {string} matchId - The ID of the match.
  * @param {number} team1Score - Score of Team 1.
@@ -35,58 +93,9 @@ export const resolveBetsForMatch = async (matchId, team1Score, team2Score, match
             const betId = betDoc.id;
 
             // Determine the outcome
-            let outcome = 'LOST';
-            let payout = 0;
+            const outcome = calculateBetOutcome(bet, team1Score, team2Score);
 
-            // Calculate margin of victory for the favorite
-            // Spread is always positive in our system (e.g., 2.5)
-            // FavoriteTeam is 1 or 2
-
-            const spread = bet.spreadAtTimeOfBet;
-            const favorite = bet.favoriteTeamAtTimeOfBet;
-
-            let scoreDiff = 0;
-            if (favorite === 1) {
-                scoreDiff = team1Score - team2Score;
-            } else if (favorite === 2) {
-                scoreDiff = team2Score - team1Score;
-            } else {
-                // Pick 'em (Spread 0)
-                // If user picked Team 1
-                if (bet.teamPicked === 1) {
-                    scoreDiff = team1Score - team2Score;
-                } else {
-                    scoreDiff = team2Score - team1Score;
-                }
-            }
-
-            // Logic for Spread Betting
-            if (spread === 0) {
-                // Pick 'em logic
-                if (scoreDiff > 0) outcome = 'WON';
-                else if (scoreDiff < 0) outcome = 'LOST';
-                else outcome = 'PUSH'; // Tie game (unlikely in pickleball usually, but possible in some formats)
-            } else {
-                // Spread logic
-                // If I bet on Favorite: Favorite must win by MORE than spread
-                // If I bet on Underdog: Underdog must win OR lose by LESS than spread
-
-                const userPickedFavorite = (bet.teamPicked === favorite);
-
-                if (userPickedFavorite) {
-                    if (scoreDiff > spread) outcome = 'WON';
-                    else if (scoreDiff === spread) outcome = 'PUSH';
-                    else outcome = 'LOST';
-                } else {
-                    // User picked Underdog
-                    // Underdog covers if Favorite wins by LESS than spread, or Favorite loses (scoreDiff < 0)
-                    if (scoreDiff < spread) outcome = 'WON';
-                    else if (scoreDiff === spread) outcome = 'PUSH';
-                    else outcome = 'LOST';
-                }
-            }
-
-            console.log(`Bet ${betId}: Picked ${bet.teamPicked}, Fav ${favorite}, Spread ${spread}, Diff ${scoreDiff} -> ${outcome}`);
+            console.log(`Bet ${betId}: Picked ${bet.teamPicked} -> ${outcome}`);
 
             // 3. Execute Transaction for Payouts
             await runTransaction(db, async (transaction) => {
@@ -99,6 +108,7 @@ export const resolveBetsForMatch = async (matchId, team1Score, team2Score, match
 
                 const currentBalance = userDoc.data().walletBalance || 0;
                 let newBalance = currentBalance;
+                let payout = 0;
 
                 if (outcome === 'WON') {
                     // Payout: Stake + Profit (1:1) = 2 * Amount

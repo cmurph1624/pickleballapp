@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, addDoc, doc, updateDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 
-const SessionModal = ({ open, onClose, session, league }) => {
+const SessionModal = ({ open, onClose, session, league, clubId }) => {
     const [formData, setFormData] = useState({
         name: '',
         players: [],
@@ -16,29 +16,26 @@ const SessionModal = ({ open, onClose, session, league }) => {
 
     // Fetch all players to map IDs to names, but only show league players
     useEffect(() => {
-        if (!league) {
-            setLeaguePlayers([]);
-            return;
-        }
+        // If we have a league, use its players (or all if Open Play)
+        // If we DON'T have a league, we imply it's a "Pickup Session" -> Show ALL club players
 
         const q = query(collection(db, 'players'), orderBy('firstName'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             let playersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            // If NOT Open Play, filter by league roster
-            if (league.type !== 'Open Play') {
+            if (league && league.type !== 'Open Play') {
                 if (!league.players || league.players.length === 0) {
                     playersData = [];
                 } else {
                     playersData = playersData.filter(p => league.players.includes(p.id));
                 }
             }
-            // If Open Play, show all players (already in playersData)
+            // If league is Open Play OR league is null (Pickup), we use all players (no filter)
 
             setLeaguePlayers(playersData);
         });
         return () => unsubscribe();
-    }, [league]);
+    }, [league, open]);
 
     useEffect(() => {
         if (session) {
@@ -105,7 +102,6 @@ const SessionModal = ({ open, onClose, session, league }) => {
         }
 
         const data = {
-            leagueId: league.id,
             name: formData.name,
             players: formData.players,
             gamesPerPlayer: parseInt(formData.gamesPerPlayer) || 0,
@@ -114,6 +110,14 @@ const SessionModal = ({ open, onClose, session, league }) => {
             courts: courts,
             updatedAt: new Date()
         };
+
+        // If league exists, link it. If not, treat as standalone (link to club).
+        if (league) {
+            data.leagueId = league.id;
+        } else {
+            data.leagueId = null;
+            data.clubId = clubId;
+        }
 
         try {
             if (session) {

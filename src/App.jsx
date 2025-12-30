@@ -46,6 +46,7 @@ function App() {
               <Route path="chat" element={<Chat />} />
               <Route path="leagues/:id" element={<LeagueDetails />} />
               <Route path="leagues/:leagueId/sessions/:sessionId" element={<SessionDetails />} />
+              <Route path="sessions/:sessionId" element={<SessionDetails />} />
               <Route path="invite" element={<ClubInvite />} />
             </Route>
           </Routes>

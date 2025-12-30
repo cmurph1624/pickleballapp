@@ -8,6 +8,7 @@ import { validateSchedule } from '../utils/scheduleValidator';
 import { useAuth } from '../contexts/AuthContext';
 import { useClub } from '../contexts/ClubContext';
 import { completeSession } from '../services/SessionService';
+import { calculateStandings } from '../utils/standingsCalculator';
 
 import ScoreModal from '../components/ScoreModal';
 import PlaceBetModal from '../components/PlaceBetModal';
@@ -35,6 +36,9 @@ const SessionDetails = () => {
 
     // Frequency Modal State
     const [frequencyModalOpen, setFrequencyModalOpen] = useState(false);
+
+    const [currentTab, setCurrentTab] = useState(0); // 0: Matches, 1: Standings
+    const [standings, setStandings] = useState([]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -65,6 +69,15 @@ const SessionDetails = () => {
         };
         fetchData();
     }, [sessionId, navigate]);
+
+    // Calculate Standings whenever matches/players change
+    useEffect(() => {
+        if (players.length > 0 && matches.length > 0 && session) {
+            const sessionWithMatches = { ...session, matches };
+            const newStandings = calculateStandings(players, [sessionWithMatches]);
+            setStandings(newStandings);
+        }
+    }, [players, matches, session]);
 
     const handleGenerateMatches = async () => {
         if (!session || !players.length) return;
@@ -237,7 +250,13 @@ const SessionDetails = () => {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                     <div className="flex items-center gap-3">
                         <button
-                            onClick={() => navigate(`/clubs/${clubId}/leagues/${leagueId}`)}
+                            onClick={() => {
+                                if (leagueId) {
+                                    navigate(`/clubs/${clubId}/leagues/${leagueId}`);
+                                } else {
+                                    navigate(`/clubs/${clubId}/leagues`); // Go back to Leagues/Sessions hub
+                                }
+                            }}
                             className="p-2 -ml-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors no-print"
                         >
                             <span className="material-symbols-outlined">arrow_back</span>
@@ -335,123 +354,202 @@ const SessionDetails = () => {
                     </div>
                 )}
 
-                <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">Matches ({matches.length})</h2>
+                {/* Tabs */}
+                <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
+                    <div className="flex gap-6">
+                        <button
+                            onClick={() => setCurrentTab(0)}
+                            className={`pb-3 px-1 text-sm font-semibold transition-colors relative ${currentTab === 0
+                                ? 'text-primary'
+                                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                }`}
+                        >
+                            Matches
+                            {currentTab === 0 && (
+                                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>
+                            )}
+                        </button>
+                        <button
+                            onClick={() => setCurrentTab(1)}
+                            className={`pb-3 px-1 text-sm font-semibold transition-colors relative ${currentTab === 1
+                                ? 'text-primary'
+                                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                }`}
+                        >
+                            Standings
+                            {currentTab === 1 && (
+                                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>
+                            )}
+                        </button>
+                    </div>
+                </div>
 
-                {/* Match List */}
-                <div className="space-y-8">
-                    {(() => {
-                        const matchesPerRound = Math.floor(players.length / 4);
-                        const chunkSize = matchesPerRound > 0 ? matchesPerRound : 1;
-                        const rounds = [];
-                        for (let i = 0; i < matches.length; i += chunkSize) {
-                            rounds.push(matches.slice(i, i + chunkSize));
-                        }
+                {currentTab === 0 && (
+                    <>
+                        <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">Matches ({matches.length})</h2>
 
-                        return rounds.map((roundMatches, roundIndex) => (
-                            <div key={roundIndex} className="print-break-inside">
-                                <h3 className="text-lg font-semibold text-primary mb-3 pb-1 border-b border-gray-200 dark:border-gray-700">
-                                    Round {roundIndex + 1}
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {roundMatches.map((match, matchIndex) => (
-                                        <div
-                                            key={match.id || matchIndex}
-                                            onClick={() => {
-                                                if (session.status !== 'COMPLETED') {
-                                                    handleMatchClick(match);
-                                                }
-                                            }}
-                                            className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-xl p-4 cursor-pointer hover:border-primary transition-all shadow-sm hover:shadow-md group relative"
-                                        >
-                                            {/* Header: Label and Spread */}
-                                            <div className="flex justify-between items-start mb-3">
-                                                <div>
-                                                    <span className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wide">
-                                                        {(() => {
-                                                            const rawName = session.courts && session.courts[matchIndex] ? session.courts[matchIndex] : `Match ${matchIndex + 1}`;
-                                                            // If it's just a number (e.g. "1"), display as "Court 1"
-                                                            return /^\d+$/.test(rawName) ? `Court ${rawName}` : rawName;
-                                                        })()}
-                                                    </span>
-                                                    {match.spread !== undefined && (
-                                                        <span className="block text-xs font-bold text-primary mt-0.5">
-                                                            {match.spread === 0 ? "Pick 'em" :
-                                                                match.favoriteTeam === 1 ? `Team 1 (-${match.spread})` :
-                                                                    match.favoriteTeam === 2 ? `Team 2 (-${match.spread})` : ''}
-                                                        </span>
+                        {/* Match List */}
+                        <div className="space-y-8">
+                            {(() => {
+                                const matchesPerRound = Math.floor(players.length / 4);
+                                const chunkSize = matchesPerRound > 0 ? matchesPerRound : 1;
+                                const rounds = [];
+                                for (let i = 0; i < matches.length; i += chunkSize) {
+                                    rounds.push(matches.slice(i, i + chunkSize));
+                                }
+
+                                return rounds.map((roundMatches, roundIndex) => (
+                                    <div key={roundIndex} className="print-break-inside">
+                                        <h3 className="text-lg font-semibold text-primary mb-3 pb-1 border-b border-gray-200 dark:border-gray-700">
+                                            Round {roundIndex + 1}
+                                        </h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {roundMatches.map((match, matchIndex) => (
+                                                <div
+                                                    key={match.id || matchIndex}
+                                                    onClick={() => {
+                                                        if (session.status !== 'COMPLETED') {
+                                                            handleMatchClick(match);
+                                                        }
+                                                    }}
+                                                    className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-xl p-4 cursor-pointer hover:border-primary transition-all shadow-sm hover:shadow-md group relative"
+                                                >
+                                                    {/* Header: Label and Spread */}
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <div>
+                                                            <span className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wide">
+                                                                {(() => {
+                                                                    const rawName = session.courts && session.courts[matchIndex] ? session.courts[matchIndex] : `Match ${matchIndex + 1}`;
+                                                                    // If it's just a number (e.g. "1"), display as "Court 1"
+                                                                    return /^\d+$/.test(rawName) ? `Court ${rawName}` : rawName;
+                                                                })()}
+                                                            </span>
+                                                            {match.spread !== undefined && (
+                                                                <span className="block text-xs font-bold text-primary mt-0.5">
+                                                                    {match.spread === 0 ? "Pick 'em" :
+                                                                        match.favoriteTeam === 1 ? `Team 1 (-${match.spread})` :
+                                                                            match.favoriteTeam === 2 ? `Team 2 (-${match.spread})` : ''}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {(match.team1Score !== undefined && match.team2Score !== undefined) ? (
+                                                            <div className="bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white px-2 py-1 rounded text-sm font-bold">
+                                                                {match.team1Score} - {match.team2Score}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="bg-gray-50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 px-2 py-1 rounded text-xs">
+                                                                Score
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Players */}
+                                                    <div className="flex items-center justify-between">
+                                                        {/* Team 1 */}
+                                                        <div className="flex-1 text-center">
+                                                            <div className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
+                                                                {getPlayerName(match.team1[0])}
+                                                            </div>
+                                                            <div className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
+                                                                {getPlayerName(match.team1[1])}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* VS Badge */}
+                                                        <div className="mx-2 flex-shrink-0">
+                                                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-xs font-bold">
+                                                                VS
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Team 2 */}
+                                                        <div className="flex-1 text-center">
+                                                            <div className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
+                                                                {getPlayerName(match.team2[0])}
+                                                            </div>
+                                                            <div className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
+                                                                {getPlayerName(match.team2[1])}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Betting Button */}
+                                                    {session.bettingDeadline && new Date() < new Date(session.bettingDeadline) && match.team1Score === undefined && session.status !== 'COMPLETED' && (
+                                                        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 flex justify-center">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleBetClick(match);
+                                                                }}
+                                                                className="w-full text-center text-xs font-bold text-primary hover:text-primary-dark py-1 rounded hover:bg-primary/5 transition-colors"
+                                                            >
+                                                                Place Bet
+                                                            </button>
+                                                        </div>
                                                     )}
                                                 </div>
-                                                {(match.team1Score !== undefined && match.team2Score !== undefined) ? (
-                                                    <div className="bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white px-2 py-1 rounded text-sm font-bold">
-                                                        {match.team1Score} - {match.team2Score}
-                                                    </div>
-                                                ) : (
-                                                    <div className="bg-gray-50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 px-2 py-1 rounded text-xs">
-                                                        Score
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Players */}
-                                            <div className="flex items-center justify-between">
-                                                {/* Team 1 */}
-                                                <div className="flex-1 text-center">
-                                                    <div className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
-                                                        {getPlayerName(match.team1[0])}
-                                                    </div>
-                                                    <div className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
-                                                        {getPlayerName(match.team1[1])}
-                                                    </div>
-                                                </div>
-
-                                                {/* VS Badge */}
-                                                <div className="mx-2 flex-shrink-0">
-                                                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-xs font-bold">
-                                                        VS
-                                                    </span>
-                                                </div>
-
-                                                {/* Team 2 */}
-                                                <div className="flex-1 text-center">
-                                                    <div className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
-                                                        {getPlayerName(match.team2[0])}
-                                                    </div>
-                                                    <div className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
-                                                        {getPlayerName(match.team2[1])}
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Betting Button */}
-                                            {session.bettingDeadline && new Date() < new Date(session.bettingDeadline) && match.team1Score === undefined && session.status !== 'COMPLETED' && (
-                                                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 flex justify-center">
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleBetClick(match);
-                                                        }}
-                                                        className="w-full text-center text-xs font-bold text-primary hover:text-primary-dark py-1 rounded hover:bg-primary/5 transition-colors"
-                                                    >
-                                                        Place Bet
-                                                    </button>
-                                                </div>
-                                            )}
+                                            ))}
                                         </div>
-                                    ))}
-                                </div>
-                            </div>
-                        ));
-                    })()}
+                                    </div>
+                                ));
+                            })()}
 
-                    {matches.length === 0 && (
-                        <div className="text-center py-10 bg-surface-light dark:bg-surface-dark rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
-                            <p className="text-gray-500 dark:text-gray-400">No matches generated yet.</p>
-                            {isAdmin && (
-                                <p className="text-sm text-gray-400 mt-1">Use the Generate button above to create a schedule.</p>
+                            {matches.length === 0 && (
+                                <div className="text-center py-10 bg-surface-light dark:bg-surface-dark rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
+                                    <p className="text-gray-500 dark:text-gray-400">No matches generated yet.</p>
+                                    {isAdmin && (
+                                        <p className="text-sm text-gray-400 mt-1">Use the Generate button above to create a schedule.</p>
+                                    )}
+                                </div>
                             )}
                         </div>
-                    )}
-                </div>
+                    </>
+                )}
+
+                {currentTab === 1 && (
+                    <div className="bg-surface-light dark:bg-surface-dark rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left">
+                                <thead className="text-xs text-gray-500 dark:text-gray-400 uppercase bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
+                                    <tr>
+                                        <th className="px-6 py-3 font-semibold">Rank</th>
+                                        <th className="px-6 py-3 font-semibold">Player</th>
+                                        <th className="px-6 py-3 font-semibold text-right">Wins</th>
+                                        <th className="px-6 py-3 font-semibold text-right">Losses</th>
+                                        <th className="px-6 py-3 font-semibold text-right">PF</th>
+                                        <th className="px-6 py-3 font-semibold text-right">PA</th>
+                                        <th className="px-6 py-3 font-semibold text-right">Diff</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700 text-gray-800 dark:text-gray-200">
+                                    {standings.map((row) => (
+                                        <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                                            <td className="px-6 py-4 font-bold text-gray-900 dark:text-white">{row.rank}</td>
+                                            <td className="px-6 py-4 font-medium">{row.name}</td>
+                                            <td className="px-6 py-4 text-right">{row.wins}</td>
+                                            <td className="px-6 py-4 text-right">{row.losses}</td>
+                                            <td className="px-6 py-4 text-right text-gray-500 dark:text-gray-400">{row.pointsFor}</td>
+                                            <td className="px-6 py-4 text-right text-gray-500 dark:text-gray-400">{row.pointsAgainst}</td>
+                                            <td className={`px-6 py-4 text-right font-bold ${row.diff > 0 ? 'text-green-600 dark:text-green-400' :
+                                                row.diff < 0 ? 'text-red-500 dark:text-red-400' :
+                                                    'text-gray-500 dark:text-gray-400'
+                                                }`}>
+                                                {row.diff > 0 ? `+${row.diff}` : row.diff}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {standings.length === 0 && (
+                                        <tr>
+                                            <td colSpan="7" className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                                                No standings available yet. Complete some matches!
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
 
                 <ScoreModal
                     open={scoreModalOpen}

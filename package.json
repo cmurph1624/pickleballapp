@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:betting": "node src/test_payout_logic.js && node src/test_betting_simulation.js",
+    "test:rating": "node src/test_rating_simulation.js"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
