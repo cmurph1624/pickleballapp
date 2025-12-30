@@ -238,24 +238,82 @@ export const generateMatches = (players, gamesPerPlayer, mode = "STRICT_SOCIAL")
                     return diffA - diffB;
                 });
 
-                // 2. Greedy Group Builder
-                // Build the group by adding people who have NOT partnered with ANYONE in the current group
+                // 2. Greedy Group Builder (Randomized Window)
+                // Instead of taking the absolute best skill match (which can lead to dead ends/repeats),
+                // we look at the top N valid candidates and pick one randomly. 
+                // This adds variety and allows the 2000 iterations to find a unique solution.
                 matchPlayers = [p1];
+                const SEARCH_WINDOW = 12;
 
-                for (const candidate of others) {
-                    if (matchPlayers.length >= 4) break;
+                while (matchPlayers.length < 4) {
+                    const validNext = [];
 
-                    // Check collision with everyone currently in the group
-                    let hasPartneredWithAny = false;
-                    for (const existing of matchPlayers) {
-                        if ((playerStats[existing.id].partners[candidate.id] || 0) > 0) {
-                            hasPartneredWithAny = true;
-                            break;
+                    // 2a. Find top N valid candidates from 'others'
+                    for (const candidate of others) {
+                        if (validNext.length >= SEARCH_WINDOW) break;
+
+                        // Skip if already in the group
+                        if (matchPlayers.some(p => p.id === candidate.id)) continue;
+
+                        // Pruning for 3rd Player:
+                        // If P1 & P2 have played, they MUST split.
+                        // If P3 has also played with BOTH P1 and P2, then P3 cannot partner either.
+                        // This implies P1 needs P4, and P2 needs P4. Impossible.
+                        // So we must reject P3 if (P1-P2 bad) AND (P1-P3 bad) AND (P2-P3 bad).
+                        if (matchPlayers.length === 2) {
+                            const pA = matchPlayers[0], pB = matchPlayers[1], pC = candidate;
+                            const abBad = (playerStats[pA.id].partners[pB.id] || 0) > 0;
+                            const acBad = (playerStats[pA.id].partners[pC.id] || 0) > 0;
+                            const bcBad = (playerStats[pB.id].partners[pC.id] || 0) > 0;
+
+                            if (abBad && acBad && bcBad) continue;
+                        }
+
+                        // Special Check for the Final (4th) Player:
+                        // Ensure that adding this player allows for at least ONE valid permutation (no repeats).
+                        // If we don't check this, we might pick 4 people who form a "repeat trap" 
+                        // (no matter how we pair them, someone is a repeat).
+                        if (matchPlayers.length === 3) {
+                            const pA = matchPlayers[0], pB = matchPlayers[1], pC = matchPlayers[2], pD = candidate;
+
+                            const hasValidPerm = [
+                                [[pA, pB], [pC, pD]],
+                                [[pA, pC], [pB, pD]],
+                                [[pA, pD], [pB, pC]]
+                            ].some(perm => {
+                                const t1p1 = perm[0][0], t1p2 = perm[0][1];
+                                const t2p1 = perm[1][0], t2p2 = perm[1][1];
+                                const bad1 = (playerStats[t1p1.id].partners[t1p2.id] || 0) > 0;
+                                const bad2 = (playerStats[t2p1.id].partners[t2p2.id] || 0) > 0;
+                                return !bad1 && !bad2;
+                            });
+
+                            if (!hasValidPerm) continue; // Reject: This group would be impossible to pair uniquely
+                        }
+
+                        // For 2nd/3rd player, we use the Relaxed Constraint to keep options open
+                        let collisionCount = 0;
+                        for (const existing of matchPlayers) {
+                            if ((playerStats[existing.id].partners[candidate.id] || 0) > 0) {
+                                collisionCount++;
+                            }
+                        }
+
+                        // Relaxed Constraint:
+                        // If they have at least one potential fresh partner, they are valid candidates.
+                        if (collisionCount < matchPlayers.length) {
+                            validNext.push(candidate);
                         }
                     }
 
-                    if (!hasPartneredWithAny) {
-                        matchPlayers.push(candidate);
+                    // 2b. If we found valid candidates, pick one randomly
+                    if (validNext.length > 0) {
+                        const pickIndex = Math.floor(Math.random() * validNext.length);
+                        matchPlayers.push(validNext[pickIndex]);
+                    } else {
+                        // Dead end: No valid unique partners found for this group.
+                        // Break and let the fallback (Step 3) handle it by allowing repeats.
+                        break;
                     }
                 }
 
