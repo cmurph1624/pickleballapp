@@ -1,0 +1,207 @@
+import { addDoc, collection, doc, getDocs, onSnapshot, orderBy, query, updateDoc, where } from 'firebase/firestore';
+import React, { useEffect, useState } from 'react';
+import { Alert, ScrollView, View } from 'react-native';
+import { Button, Checkbox, HelperText, Modal, Portal, SegmentedButtons, Text, TextInput, useTheme } from 'react-native-paper';
+import { useAuth } from '../contexts/AuthContext';
+import { useClub } from '../contexts/ClubContext';
+import { db } from '../firebase';
+
+interface LeagueModalProps {
+    visible: boolean;
+    onDismiss: () => void;
+    league?: any;
+}
+
+const LeagueModal = ({ visible, onDismiss, league }: LeagueModalProps) => {
+    const theme = useTheme();
+    const { clubId } = useClub();
+    const { currentUser } = useAuth();
+
+    const [name, setName] = useState('');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+    const [type, setType] = useState('Cumulative');
+    const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
+
+    const [allPlayers, setAllPlayers] = useState<any[]>([]);
+    const [errors, setErrors] = useState<{ [key: string]: string }>({});
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        const q = query(collection(db, 'players'), orderBy('firstName'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const playersData = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            setAllPlayers(playersData);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    useEffect(() => {
+        if (visible) {
+            if (league) {
+                setName(league.name);
+                setStartDate(league.startDate);
+                setEndDate(league.endDate);
+                setType(league.type);
+                setSelectedPlayers(league.players || []);
+            } else {
+                setName('');
+                setStartDate('');
+                setEndDate('');
+                setType('Cumulative');
+                setSelectedPlayers([]);
+            }
+            setErrors({});
+        }
+    }, [visible, league]);
+
+    const handlePlayerToggle = (playerId: string) => {
+        if (selectedPlayers.includes(playerId)) {
+            setSelectedPlayers(prev => prev.filter(id => id !== playerId));
+        } else {
+            setSelectedPlayers(prev => [...prev, playerId]);
+        }
+    };
+
+    const validate = async () => {
+        const newErrors: { [key: string]: string } = {};
+
+        if (!name.trim()) newErrors.name = "Name is required";
+        if (!startDate) newErrors.startDate = "Start date is required";
+        if (!endDate) newErrors.endDate = "End date is required";
+
+        if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
+            newErrors.endDate = "End date cannot be before start date.";
+        }
+
+        if (name.trim()) {
+            if (!league || league.name !== name.trim()) {
+                const q = query(collection(db, 'leagues'), where("name", "==", name.trim()));
+                const querySnapshot = await getDocs(q);
+                if (!querySnapshot.empty) {
+                    newErrors.name = "League name already exists.";
+                }
+            }
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    const handleSubmit = async () => {
+        if (loading) return;
+
+        const isValid = await validate();
+        if (!isValid) return;
+
+        setLoading(true);
+
+        const data: any = {
+            clubId: clubId,
+            name: name,
+            startDate: startDate,
+            endDate: endDate,
+            type: type,
+            players: selectedPlayers,
+            updatedAt: new Date()
+        };
+
+        try {
+            if (league) {
+                await updateDoc(doc(db, 'leagues', league.id), data);
+            } else {
+                data.createdAt = new Date();
+                data.createdBy = currentUser ? currentUser.uid : 'anonymous';
+                await addDoc(collection(db, 'leagues'), data);
+            }
+            onDismiss();
+        } catch (error: any) {
+            console.error("Error saving league:", error);
+            Alert.alert("Error", error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <Portal>
+            <Modal visible={visible} onDismiss={onDismiss} contentContainerStyle={{ backgroundColor: theme.colors.surface, margin: 20, borderRadius: 12, maxHeight: '90%' }}>
+                <View className="p-4 border-b border-gray-200 dark:border-gray-700">
+                    <Text variant="titleLarge" className="font-bold">{league ? 'Edit League' : 'New League'}</Text>
+                </View>
+
+                <ScrollView className="p-4">
+                    <TextInput
+                        label="League Name"
+                        value={name}
+                        onChangeText={setName}
+                        mode="outlined"
+                        error={!!errors.name}
+                        className="mb-2"
+                    />
+                    {errors.name && <HelperText type="error">{errors.name}</HelperText>}
+
+                    <TextInput
+                        label="Start Date (YYYY-MM-DD)" // In a real app, use a date picker
+                        value={startDate}
+                        onChangeText={setStartDate}
+                        mode="outlined"
+                        placeholder="2024-01-01"
+                        error={!!errors.startDate}
+                        className="mb-2"
+                    />
+
+                    <TextInput
+                        label="End Date (YYYY-MM-DD)"
+                        value={endDate}
+                        onChangeText={setEndDate}
+                        mode="outlined"
+                        placeholder="2024-12-31"
+                        error={!!errors.endDate}
+                        className="mb-4"
+                    />
+                    {errors.endDate && <HelperText type="error">{errors.endDate}</HelperText>}
+
+                    <Text className="mb-2 font-bold">Type</Text>
+                    <SegmentedButtons
+                        value={type}
+                        onValueChange={setType}
+                        buttons={[
+                            { value: 'Cumulative', label: 'Cumulative' },
+                            { value: 'Open Play', label: 'Open Play' },
+                        ]}
+                        className="mb-4"
+                    />
+
+                    {type !== 'Open Play' && (
+                        <View className="mb-4 border border-gray-200 dark:border-gray-700 rounded-lg p-2 max-h-48">
+                            <Text className="font-bold mb-2">Select Players</Text>
+                            <ScrollView nestedScrollEnabled>
+                                {allPlayers.map(player => (
+                                    <View key={player.id} className="flex-row items-center">
+                                        <Checkbox
+                                            status={selectedPlayers.includes(player.id) ? 'checked' : 'unchecked'}
+                                            onPress={() => handlePlayerToggle(player.id)}
+                                        />
+                                        <Text>{player.firstName} {player.lastName}</Text>
+                                    </View>
+                                ))}
+                                {allPlayers.length === 0 && <Text className="text-gray-500 italic">No players found.</Text>}
+                            </ScrollView>
+                        </View>
+                    )}
+                </ScrollView>
+
+                <View className="p-4 border-t border-gray-200 dark:border-gray-700 flex-row justify-end gap-2">
+                    <Button onPress={onDismiss}>Cancel</Button>
+                    <Button mode="contained" onPress={handleSubmit} loading={loading}>Save</Button>
+                </View>
+            </Modal>
+        </Portal>
+    );
+};
+
+export default LeagueModal;
