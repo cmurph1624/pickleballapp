@@ -10,7 +10,8 @@ const UserDashboard = () => {
     const navigate = useNavigate();
 
     // Data States
-    const [upcomingSessions, setUpcomingSessions] = useState([]);
+    const [allSessions, setAllSessions] = useState([]);
+    const [showCompleted, setShowCompleted] = useState(false);
     const [openBets, setOpenBets] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -29,22 +30,18 @@ const UserDashboard = () => {
                     linkedPlayerId = playerSnap.docs[0].id;
                 }
 
-                // 2. Fetch Upcoming Sessions
+                // 2. Fetch All Sessions
                 if (linkedPlayerId) {
                     const sessionsRef = collection(db, 'sessions');
                     const qSessions = query(sessionsRef, where('players', 'array-contains', linkedPlayerId));
                     const sessionsSnap = await getDocs(qSessions);
-
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
 
                     const validSessions = sessionsSnap.docs
                         .map(doc => ({ id: doc.id, ...doc.data() }))
                         .filter(s => {
                             if (s.archived) return false; // Exclude archived sessions
                             if (!s.scheduledDate) return false;
-                            const d = s.scheduledDate.toDate ? s.scheduledDate.toDate() : new Date(s.scheduledDate);
-                            return d >= today;
+                            return true;
                         })
                         .sort((a, b) => {
                             const dateA = a.scheduledDate.toDate ? a.scheduledDate.toDate() : new Date(a.scheduledDate);
@@ -52,7 +49,7 @@ const UserDashboard = () => {
                             return dateA - dateB;
                         });
 
-                    setUpcomingSessions(validSessions);
+                    setAllSessions(validSessions);
                 }
 
                 // 3. Fetch Open Bets
@@ -113,6 +110,21 @@ const UserDashboard = () => {
         }
     };
 
+    // Filter Logic
+    const getVisibleSessions = () => {
+        const now = new Date();
+
+        return allSessions.filter(session => {
+            if (showCompleted) return true; // Show all if toggle is on
+
+            // Otherwise, show only upcoming
+            const d = session.scheduledDate.toDate ? session.scheduledDate.toDate() : new Date(session.scheduledDate);
+            return d > now;
+        });
+    };
+
+    const visibleSessions = getVisibleSessions();
+
     if (loading) {
         return (
             <div className="flex justify-center items-center min-h-screen bg-background-light dark:bg-background-dark">
@@ -156,14 +168,37 @@ const UserDashboard = () => {
                     <div className="flex justify-between items-center mb-3">
                         <div className="flex items-center gap-2 text-gray-800 dark:text-white">
                             <span className="material-symbols-outlined text-primary">sports_tennis</span>
-                            <h3 className="text-lg font-bold">Upcoming Schedule</h3>
+                            <h3 className="text-lg font-bold">
+                                {showCompleted ? "All Sessions" : "Upcoming Schedule"}
+                            </h3>
                         </div>
-                        <button className="text-xs font-semibold text-primary hover:text-primary-dark" onClick={() => alert("Go to schedule/calendar")}>View All</button>
+                        {/* Toggle Switch */}
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                {showCompleted ? "Showing All" : "Upcoming Only"}
+                            </span>
+                            <button
+                                onClick={() => setShowCompleted(!showCompleted)}
+                                className={`
+                                    relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
+                                    ${showCompleted ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'}
+                                `}
+                            >
+                                <span
+                                    className={`
+                                        inline-block h-4 w-4 transform rounded-full bg-white transition-transform
+                                        ${showCompleted ? 'translate-x-6' : 'translate-x-1'}
+                                    `}
+                                />
+                            </button>
+                        </div>
                     </div>
 
-                    {upcomingSessions.length > 0 ? (
-                        upcomingSessions.map(session => {
+                    {visibleSessions.length > 0 ? (
+                        visibleSessions.map(session => {
                             const { month, day, time } = formatDate(session.scheduledDate);
+                            const isPast = (session.scheduledDate.toDate ? session.scheduledDate.toDate() : new Date(session.scheduledDate)) < new Date();
+
                             return (
                                 <div
                                     key={session.id}
@@ -172,14 +207,21 @@ const UserDashboard = () => {
                                 >
                                     <div className="flex justify-between items-start mb-3">
                                         <div>
-                                            <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-bold px-2 py-1 rounded uppercase tracking-wide">
-                                                Next Match
-                                            </span>
+                                            {isPast ? (
+                                                <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs font-bold px-2 py-1 rounded uppercase tracking-wide">
+                                                    Completed
+                                                </span>
+                                            ) : (
+                                                <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-bold px-2 py-1 rounded uppercase tracking-wide">
+                                                    Next Match
+                                                </span>
+                                            )}
+
                                             <h4 className="text-base font-semibold mt-2 text-gray-900 dark:text-white capitalize">
                                                 {session.name}
                                             </h4>
                                         </div>
-                                        <div className="text-center bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg p-2 min-w-[60px]">
+                                        <div className={`text-center border rounded-lg p-2 min-w-[60px] ${isPast ? 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 opacity-75' : 'bg-gray-50 dark:bg-gray-800 border-gray-100 dark:border-gray-700'}`}>
                                             <span className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase">{month}</span>
                                             <span className="block text-lg font-bold text-gray-800 dark:text-white">{day}</span>
                                         </div>
@@ -197,7 +239,7 @@ const UserDashboard = () => {
                         })
                     ) : (
                         <div className="bg-surface-light dark:bg-surface-dark rounded-xl p-4 text-center text-gray-500 text-sm">
-                            No upcoming matches scheduled.
+                            {showCompleted ? "No sessions found." : "No upcoming matches scheduled."}
                         </div>
                     )}
                 </section>
