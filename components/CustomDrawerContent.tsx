@@ -113,13 +113,13 @@ export default function CustomDrawerContent(props: any) {
                                 onPress={() => router.push({ pathname: '/(drawer)/high-rollers', params: { clubId: club.id } })}
                                 style={{ paddingVertical: 4 }}
                             />
-                            <List.Item
+                            {/* <List.Item
                                 title="Calendar"
                                 titleStyle={{ color: '#cbd5e1', fontSize: 14 }}
                                 left={props => <List.Icon {...props} color="#94a3b8" icon="calendar" style={{ margin: 0 }} />}
                                 onPress={() => router.push({ pathname: '/(drawer)/schedule', params: { clubId: club.id } })}
                                 style={{ paddingVertical: 4 }}
-                            />
+                            /> */}
                         </View>
                     </List.Accordion>
                 ))}

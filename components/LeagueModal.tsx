@@ -126,23 +126,36 @@ const LeagueModal = ({ visible, onDismiss, league }: LeagueModalProps) => {
         }
     };
 
+    const inputTheme = {
+        colors: {
+            background: '#1e293b',
+            text: 'white',
+            onSurfaceVariant: '#94a3b8',
+            placeholder: '#94a3b8',
+            primary: '#5b7cfa',
+            error: '#ef4444'
+        }
+    };
+
     return (
         <Portal>
-            <Modal visible={visible} onDismiss={onDismiss} contentContainerStyle={{ backgroundColor: theme.colors.surface, margin: 20, borderRadius: 12, maxHeight: '90%' }}>
-                <View className="p-4 border-b border-gray-200 dark:border-gray-700">
-                    <Text variant="titleLarge" className="font-bold">{league ? 'Edit League' : 'New League'}</Text>
+            <Modal visible={visible} onDismiss={onDismiss} contentContainerStyle={{ backgroundColor: '#0f172a', margin: 20, borderRadius: 12, maxHeight: '90%', borderWidth: 1, borderColor: '#334155' }}>
+                <View className="p-4 border-b border-slate-700 bg-slate-800 rounded-t-xl">
+                    <Text variant="titleLarge" className="font-bold text-white max-w-[80%]">{league ? 'Edit League' : 'New League'}</Text>
                 </View>
 
-                <ScrollView className="p-4">
+                <ScrollView className="p-4 bg-slate-900">
                     <TextInput
                         label="League Name"
                         value={name}
                         onChangeText={setName}
                         mode="outlined"
                         error={!!errors.name}
-                        className="mb-2"
+                        className="mb-2 bg-slate-800"
+                        textColor="white"
+                        theme={inputTheme}
                     />
-                    {errors.name && <HelperText type="error">{errors.name}</HelperText>}
+                    {errors.name && <HelperText type="error" visible={true} padding="none" style={{ color: '#ef4444', marginBottom: 8 }}>{errors.name}</HelperText>}
 
                     <TextInput
                         label="Start Date (YYYY-MM-DD)" // In a real app, use a date picker
@@ -150,9 +163,13 @@ const LeagueModal = ({ visible, onDismiss, league }: LeagueModalProps) => {
                         onChangeText={setStartDate}
                         mode="outlined"
                         placeholder="2024-01-01"
+                        placeholderTextColor="#64748b"
                         error={!!errors.startDate}
-                        className="mb-2"
+                        className="mb-2 bg-slate-800"
+                        textColor="white"
+                        theme={inputTheme}
                     />
+                    {errors.startDate && <HelperText type="error" visible={true} padding="none" style={{ color: '#ef4444', marginBottom: 8 }}>{errors.startDate}</HelperText>}
 
                     <TextInput
                         label="End Date (YYYY-MM-DD)"
@@ -160,44 +177,50 @@ const LeagueModal = ({ visible, onDismiss, league }: LeagueModalProps) => {
                         onChangeText={setEndDate}
                         mode="outlined"
                         placeholder="2024-12-31"
+                        placeholderTextColor="#64748b"
                         error={!!errors.endDate}
-                        className="mb-4"
+                        className="mb-4 bg-slate-800"
+                        textColor="white"
+                        theme={inputTheme}
                     />
-                    {errors.endDate && <HelperText type="error">{errors.endDate}</HelperText>}
+                    {errors.endDate && <HelperText type="error" visible={true} padding="none" style={{ color: '#ef4444', marginBottom: 8 }}>{errors.endDate}</HelperText>}
 
-                    <Text className="mb-2 font-bold">Type</Text>
+                    <Text className="mb-2 font-bold text-white">Type</Text>
                     <SegmentedButtons
                         value={type}
                         onValueChange={setType}
                         buttons={[
-                            { value: 'Cumulative', label: 'Cumulative' },
-                            { value: 'Open Play', label: 'Open Play' },
+                            { value: 'Cumulative', label: 'Cumulative', style: { backgroundColor: type === 'Cumulative' ? '#5b7cfa' : '#1e293b', borderColor: '#334155' }, labelStyle: { color: type === 'Cumulative' ? 'white' : '#94a3b8' } },
+                            { value: 'Open Play', label: 'Open Play', style: { backgroundColor: type === 'Open Play' ? '#5b7cfa' : '#1e293b', borderColor: '#334155' }, labelStyle: { color: type === 'Open Play' ? 'white' : '#94a3b8' } },
                         ]}
                         className="mb-4"
+                        theme={{ colors: { secondaryContainer: '#5b7cfa', onSecondaryContainer: 'white' } }}
                     />
 
                     {type !== 'Open Play' && (
-                        <View className="mb-4 border border-gray-200 dark:border-gray-700 rounded-lg p-2 max-h-48">
-                            <Text className="font-bold mb-2">Select Players</Text>
+                        <View className="mb-4 border border-slate-700 rounded-lg p-2 max-h-48 bg-slate-800">
+                            <Text className="font-bold mb-2 text-white">Select Players</Text>
                             <ScrollView nestedScrollEnabled>
                                 {allPlayers.map(player => (
-                                    <View key={player.id} className="flex-row items-center">
+                                    <View key={player.id} className="flex-row items-center py-1">
                                         <Checkbox
                                             status={selectedPlayers.includes(player.id) ? 'checked' : 'unchecked'}
                                             onPress={() => handlePlayerToggle(player.id)}
+                                            color="#5b7cfa"
+                                            uncheckedColor="#64748b"
                                         />
-                                        <Text>{player.firstName} {player.lastName}</Text>
+                                        <Text className="text-slate-300">{player.firstName} {player.lastName}</Text>
                                     </View>
                                 ))}
-                                {allPlayers.length === 0 && <Text className="text-gray-500 italic">No players found.</Text>}
+                                {allPlayers.length === 0 && <Text className="text-slate-500 italic">No players found.</Text>}
                             </ScrollView>
                         </View>
                     )}
                 </ScrollView>
 
-                <View className="p-4 border-t border-gray-200 dark:border-gray-700 flex-row justify-end gap-2">
-                    <Button onPress={onDismiss}>Cancel</Button>
-                    <Button mode="contained" onPress={handleSubmit} loading={loading}>Save</Button>
+                <View className="p-4 border-t border-slate-700 bg-slate-800 rounded-b-xl flex-row justify-end gap-2">
+                    <Button onPress={onDismiss} textColor="#94a3b8">Cancel</Button>
+                    <Button mode="contained" onPress={handleSubmit} loading={loading} buttonColor="#5b7cfa" textColor="white">Save</Button>
                 </View>
             </Modal>
         </Portal>

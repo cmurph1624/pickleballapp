@@ -94,14 +94,25 @@ const PlayerModal = ({ visible, onDismiss, player }: PlayerModalProps) => {
         }
     };
 
+    const inputTheme = {
+        colors: {
+            background: '#1e293b',
+            text: 'white',
+            onSurfaceVariant: '#94a3b8',
+            placeholder: '#94a3b8',
+            primary: '#5b7cfa',
+            error: '#ef4444'
+        }
+    };
+
     return (
         <Portal>
-            <Modal visible={visible} onDismiss={onDismiss} contentContainerStyle={{ backgroundColor: theme.colors.surface, margin: 20, borderRadius: 12, maxHeight: '90%' }}>
-                <View className="p-4 border-b border-gray-200 dark:border-gray-700">
-                    <Text variant="titleLarge" className="font-bold">{player ? 'Edit Player' : 'Add Player'}</Text>
+            <Modal visible={visible} onDismiss={onDismiss} contentContainerStyle={{ backgroundColor: '#0f172a', margin: 20, borderRadius: 12, maxHeight: '90%', borderWidth: 1, borderColor: '#334155' }}>
+                <View className="p-4 border-b border-slate-700 bg-slate-800 rounded-t-xl">
+                    <Text variant="titleLarge" className="font-bold text-white">{player ? 'Edit Player' : 'Add Player'}</Text>
                 </View>
 
-                <ScrollView className="p-4">
+                <ScrollView className="p-4 bg-slate-900">
                     <View className="flex-row gap-2 mb-2">
                         <TextInput
                             label="First Name"
@@ -109,6 +120,9 @@ const PlayerModal = ({ visible, onDismiss, player }: PlayerModalProps) => {
                             onChangeText={setFirstName}
                             mode="outlined"
                             style={{ flex: 1 }}
+                            className="bg-slate-800"
+                            textColor="white"
+                            theme={inputTheme}
                         />
                         <TextInput
                             label="Last Name"
@@ -116,18 +130,22 @@ const PlayerModal = ({ visible, onDismiss, player }: PlayerModalProps) => {
                             onChangeText={setLastName}
                             mode="outlined"
                             style={{ flex: 1 }}
+                            className="bg-slate-800"
+                            textColor="white"
+                            theme={inputTheme}
                         />
                     </View>
 
-                    <Text className="mb-2 font-bold mt-2">Gender</Text>
+                    <Text className="mb-2 font-bold mt-2 text-white">Gender</Text>
                     <SegmentedButtons
                         value={gender}
                         onValueChange={setGender}
                         buttons={[
-                            { value: 'Male', label: 'Male' },
-                            { value: 'Female', label: 'Female' },
+                            { value: 'Male', label: 'Male', style: { backgroundColor: gender === 'Male' ? '#5b7cfa' : '#1e293b', borderColor: '#334155' }, labelStyle: { color: gender === 'Male' ? 'white' : '#94a3b8' } },
+                            { value: 'Female', label: 'Female', style: { backgroundColor: gender === 'Female' ? '#5b7cfa' : '#1e293b', borderColor: '#334155' }, labelStyle: { color: gender === 'Female' ? 'white' : '#94a3b8' } },
                         ]}
                         className="mb-4"
+                        theme={{ colors: { secondaryContainer: '#5b7cfa', onSecondaryContainer: 'white' } }}
                     />
 
                     <View className="flex-row gap-2 mb-2">
@@ -138,6 +156,9 @@ const PlayerModal = ({ visible, onDismiss, player }: PlayerModalProps) => {
                             mode="outlined"
                             keyboardType="numeric"
                             style={{ flex: 1 }}
+                            className="bg-slate-800"
+                            textColor="white"
+                            theme={inputTheme}
                         />
                         <TextInput
                             label="DUPR (Singles)"
@@ -146,6 +167,9 @@ const PlayerModal = ({ visible, onDismiss, player }: PlayerModalProps) => {
                             mode="outlined"
                             keyboardType="numeric"
                             style={{ flex: 1 }}
+                            className="bg-slate-800"
+                            textColor="white"
+                            theme={inputTheme}
                         />
                     </View>
 
@@ -156,17 +180,19 @@ const PlayerModal = ({ visible, onDismiss, player }: PlayerModalProps) => {
                         mode="outlined"
                         autoCapitalize="none"
                         keyboardType="email-address"
-                        className="mb-4"
+                        className="mb-1 bg-slate-800"
+                        textColor="white"
+                        theme={inputTheme}
                     />
-                    <HelperText type="info">
+                    <HelperText type="info" style={{ color: '#94a3b8' }}>
                         Link to an existing app user account.
                     </HelperText>
 
                 </ScrollView>
 
-                <View className="p-4 border-t border-gray-200 dark:border-gray-700 flex-row justify-end gap-2">
-                    <Button onPress={onDismiss}>Cancel</Button>
-                    <Button mode="contained" onPress={handleSubmit} loading={loading}>Save</Button>
+                <View className="p-4 border-t border-slate-700 bg-slate-800 rounded-b-xl flex-row justify-end gap-2">
+                    <Button onPress={onDismiss} textColor="#94a3b8">Cancel</Button>
+                    <Button mode="contained" onPress={handleSubmit} loading={loading} buttonColor="#5b7cfa" textColor="white">Save</Button>
                 </View>
             </Modal>
         </Portal>

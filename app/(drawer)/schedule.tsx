@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { FlatList, View } from 'react-native';
@@ -13,8 +13,9 @@ export default function ScheduleScreen() {
   const [markedDates, setMarkedDates] = useState<any>({});
   const [loading, setLoading] = useState(true);
 
-  const { clubId } = useLocalSearchParams();
+  const { clubId, leagueId } = useLocalSearchParams();
   const theme = useTheme();
+  const router = useRouter(); // Added router here
 
   useEffect(() => {
     if (!clubId) {
@@ -22,10 +23,14 @@ export default function ScheduleScreen() {
       return;
     }
 
-    const q = query(
+    let q = query(
       collection(db, 'sessions'),
       where('clubId', '==', clubId)
     );
+
+    if (leagueId) {
+      q = query(q, where('leagueId', '==', leagueId));
+    }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const sessionsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -44,16 +49,24 @@ export default function ScheduleScreen() {
     });
 
     return () => unsubscribe();
-  }, [clubId]);
+  }, [clubId, leagueId]);
 
   const selectedSessions = sessions.filter(session => {
     if (!selected || !session.scheduledDate) return false;
     return session.scheduledDate.startsWith(selected);
   });
 
+  const handleSessionPress = (sessionId: string) => {
+    router.push({
+      pathname: '/(drawer)/session/[id]',
+      params: { id: sessionId, clubId: clubId as string }
+    });
+  };
+
   const renderItem = ({ item }: { item: any }) => (
-    <Card className="mb-2 bg-white dark:bg-slate-800" onPress={() => console.log('View Session', item.id)}>
+    <Card className="mb-2 bg-white dark:bg-slate-800" onPress={() => handleSessionPress(item.id)}>
       <Card.Content>
+        {/* ... content remains same ... */}
         <Text variant="titleMedium" className="font-bold">{item.name || 'Unnamed Session'}</Text>
         <Text variant="bodySmall" className="text-gray-500">
           {new Date(item.scheduledDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

@@ -137,20 +137,33 @@ const SessionModal = ({ visible, onDismiss, session, league, clubId }: SessionMo
         }
     };
 
+    const inputTheme = {
+        colors: {
+            background: '#1e293b',
+            text: 'white',
+            onSurfaceVariant: '#94a3b8',
+            placeholder: '#94a3b8',
+            primary: '#5b7cfa',
+            error: '#ef4444'
+        }
+    };
+
     return (
         <Portal>
-            <Modal visible={visible} onDismiss={onDismiss} contentContainerStyle={{ backgroundColor: theme.colors.surface, margin: 20, borderRadius: 12, maxHeight: '90%' }}>
-                <View className="p-4 border-b border-gray-200 dark:border-gray-700">
-                    <Text variant="titleLarge" className="font-bold">{session ? 'Edit Session' : 'Add Session'}</Text>
+            <Modal visible={visible} onDismiss={onDismiss} contentContainerStyle={{ backgroundColor: '#0f172a', margin: 20, borderRadius: 12, maxHeight: '90%', borderWidth: 1, borderColor: '#334155' }}>
+                <View className="p-4 border-b border-slate-700 bg-slate-800 rounded-t-xl">
+                    <Text variant="titleLarge" className="font-bold text-white max-w-[80%]">{session ? 'Edit Session' : 'Add Session'}</Text>
                 </View>
 
-                <ScrollView className="p-4">
+                <ScrollView className="p-4 bg-slate-900">
                     <TextInput
                         label="Session Name"
                         value={name}
                         onChangeText={setName}
                         mode="outlined"
-                        className="mb-2"
+                        className="mb-2 bg-slate-800"
+                        textColor="white"
+                        theme={inputTheme}
                     />
 
                     <View className="flex-row gap-2 mb-2">
@@ -161,6 +174,9 @@ const SessionModal = ({ visible, onDismiss, session, league, clubId }: SessionMo
                             mode="outlined"
                             keyboardType="numeric"
                             style={{ flex: 1 }}
+                            className="bg-slate-800"
+                            textColor="white"
+                            theme={inputTheme}
                         />
                         <TextInput
                             label="Rounds"
@@ -169,6 +185,9 @@ const SessionModal = ({ visible, onDismiss, session, league, clubId }: SessionMo
                             mode="outlined"
                             keyboardType="numeric"
                             style={{ flex: 1 }}
+                            className="bg-slate-800"
+                            textColor="white"
+                            theme={inputTheme}
                         />
                     </View>
 
@@ -177,7 +196,9 @@ const SessionModal = ({ visible, onDismiss, session, league, clubId }: SessionMo
                         value={courtNames}
                         onChangeText={setCourtNames}
                         mode="outlined"
-                        className="mb-2"
+                        className="mb-2 bg-slate-800"
+                        textColor="white"
+                        theme={inputTheme}
                     />
 
                     <TextInput
@@ -186,7 +207,10 @@ const SessionModal = ({ visible, onDismiss, session, league, clubId }: SessionMo
                         onChangeText={setScheduledDate}
                         mode="outlined"
                         placeholder="2024-01-01T10:00:00"
-                        className="mb-2"
+                        placeholderTextColor="#64748b"
+                        className="mb-2 bg-slate-800"
+                        textColor="white"
+                        theme={inputTheme}
                     />
 
                     <TextInput
@@ -195,32 +219,37 @@ const SessionModal = ({ visible, onDismiss, session, league, clubId }: SessionMo
                         onChangeText={setBettingDeadline}
                         mode="outlined"
                         placeholder="2024-01-01T09:00:00"
-                        className="mb-4"
+                        placeholderTextColor="#64748b"
+                        className="mb-4 bg-slate-800"
+                        textColor="white"
+                        theme={inputTheme}
                     />
 
-                    <View className="mb-4 border border-gray-200 dark:border-gray-700 rounded-lg p-2 max-h-48">
+                    <View className="mb-4 border border-slate-700 rounded-lg p-2 max-h-48 bg-slate-800">
                         <View className="flex-row justify-between mb-2">
-                            <Text className="font-bold">Select Players</Text>
-                            <Text>{selectedPlayers.length} / {leaguePlayers.length}</Text>
+                            <Text className="font-bold text-white">Select Players</Text>
+                            <Text className="text-slate-400">{selectedPlayers.length} / {leaguePlayers.length}</Text>
                         </View>
                         <ScrollView nestedScrollEnabled>
                             {leaguePlayers.map(player => (
-                                <View key={player.id} className="flex-row items-center">
+                                <View key={player.id} className="flex-row items-center py-1">
                                     <Checkbox
                                         status={selectedPlayers.includes(player.id) ? 'checked' : 'unchecked'}
                                         onPress={() => handlePlayerToggle(player.id)}
+                                        color="#5b7cfa"
+                                        uncheckedColor="#64748b"
                                     />
-                                    <Text>{player.firstName} {player.lastName}</Text>
+                                    <Text className="text-slate-300">{player.firstName} {player.lastName}</Text>
                                 </View>
                             ))}
-                            {leaguePlayers.length === 0 && <Text className="text-gray-500 italic">No players available.</Text>}
+                            {leaguePlayers.length === 0 && <Text className="text-slate-500 italic">No players available.</Text>}
                         </ScrollView>
                     </View>
                 </ScrollView>
 
-                <View className="p-4 border-t border-gray-200 dark:border-gray-700 flex-row justify-end gap-2">
-                    <Button onPress={onDismiss}>Cancel</Button>
-                    <Button mode="contained" onPress={handleSubmit} loading={loading}>Save</Button>
+                <View className="p-4 border-t border-slate-700 bg-slate-800 rounded-b-xl flex-row justify-end gap-2">
+                    <Button onPress={onDismiss} textColor="#94a3b8">Cancel</Button>
+                    <Button mode="contained" onPress={handleSubmit} loading={loading} buttonColor="#5b7cfa" textColor="white">Save</Button>
                 </View>
             </Modal>
         </Portal>
