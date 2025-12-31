@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, updateDoc, collection, query, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, getDocs, limit, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { generateMatches } from '../utils/matchGenerator';
 import { calculateSpread } from '../services/Oddsmaker';
@@ -14,6 +14,7 @@ import ScoreModal from '../components/ScoreModal';
 import PlaceBetModal from '../components/PlaceBetModal';
 import MatchFrequencyModal from '../components/MatchFrequencyModal';
 import SessionScorecard from '../components/SessionScorecard';
+import ReviewBetsModal from '../components/ReviewBetsModal';
 
 const SessionDetails = () => {
     const { currentUser } = useAuth();
@@ -37,8 +38,14 @@ const SessionDetails = () => {
     // Frequency Modal State
     const [frequencyModalOpen, setFrequencyModalOpen] = useState(false);
 
+    // Review Bets Modal State
+    const [reviewBetsModalOpen, setReviewBetsModalOpen] = useState(false);
+    const [selectedReviewMatch, setSelectedReviewMatch] = useState(null);
+
     const [currentTab, setCurrentTab] = useState(0); // 0: Matches, 1: Standings
     const [standings, setStandings] = useState([]);
+
+    const [hasBets, setHasBets] = useState(false);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -61,6 +68,16 @@ const SessionDetails = () => {
                     const sessionPlayers = allPlayers.filter(p => sessionData.players.includes(p.id));
                     setPlayers(sessionPlayers);
                 }
+
+                // Check for ANY bets on this session
+                const betsQuery = query(
+                    collection(db, 'bets'),
+                    where('weekId', '==', sessionId),
+                    limit(1)
+                );
+                const betsSnap = await getDocs(betsQuery);
+                setHasBets(!betsSnap.empty);
+
             } catch (error) {
                 console.error("Error fetching data:", error);
             } finally {
@@ -135,6 +152,11 @@ const SessionDetails = () => {
     const handleBetClick = (match) => {
         setSelectedBetMatch(match);
         setBetModalOpen(true);
+    };
+
+    const handleReviewBetsClick = (match) => {
+        setSelectedReviewMatch(match);
+        setReviewBetsModalOpen(true);
     };
 
     const handleSaveScore = async (matchId, team1Score, team2Score) => {
@@ -303,7 +325,7 @@ const SessionDetails = () => {
                                     <div className="flex gap-2">
                                         <button
                                             onClick={handleGenerateMatches}
-                                            disabled={matches.some(m => m.team1Score !== undefined || m.team2Score !== undefined)}
+                                            disabled={matches.some(m => m.team1Score !== undefined || m.team2Score !== undefined) || hasBets}
                                             className="bg-primary hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1 transition-colors"
                                         >
                                             <span className="material-symbols-outlined text-lg">autorenew</span>
@@ -312,7 +334,7 @@ const SessionDetails = () => {
                                         {matches.length > 0 && (
                                             <button
                                                 onClick={handleClearMatches}
-                                                disabled={matches.some(m => m.team1Score !== undefined || m.team2Score !== undefined)}
+                                                disabled={matches.some(m => m.team1Score !== undefined || m.team2Score !== undefined) || hasBets}
                                                 className="border border-red-500 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1 transition-colors"
                                             >
                                                 <span className="material-symbols-outlined text-lg">delete</span>
@@ -475,15 +497,24 @@ const SessionDetails = () => {
 
                                                     {/* Betting Button */}
                                                     {session.bettingDeadline && new Date() < new Date(session.bettingDeadline) && match.team1Score === undefined && session.status !== 'COMPLETED' && (
-                                                        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 flex justify-center">
+                                                        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 flex gap-2">
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     handleBetClick(match);
                                                                 }}
-                                                                className="w-full text-center text-xs font-bold text-primary hover:text-primary-dark py-1 rounded hover:bg-primary/5 transition-colors"
+                                                                className="flex-1 text-center text-xs font-bold text-primary hover:text-primary-dark py-1 rounded hover:bg-primary/5 transition-colors"
                                                             >
                                                                 Place Bet
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleReviewBetsClick(match);
+                                                                }}
+                                                                className="flex-1 text-center text-xs font-bold text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 py-1 rounded hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
+                                                            >
+                                                                Review Bets
                                                             </button>
                                                         </div>
                                                     )}
@@ -575,6 +606,14 @@ const SessionDetails = () => {
                     onClose={() => setFrequencyModalOpen(false)}
                     members={players}
                     matches={matches}
+                />
+
+                <ReviewBetsModal
+                    open={reviewBetsModalOpen}
+                    onClose={() => setReviewBetsModalOpen(false)}
+                    match={selectedReviewMatch}
+                    team1Name={selectedReviewMatch ? getTeamNames(selectedReviewMatch).team1 : ''}
+                    team2Name={selectedReviewMatch ? getTeamNames(selectedReviewMatch).team2 : ''}
                 />
             </div>
         </div>

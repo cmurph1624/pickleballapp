@@ -40,7 +40,10 @@ export const AuthProvider = ({ children }) => {
                         isAdmin: false,
                         walletBalance: 500,
                         hiddenRating: 50,
-                        createdAt: new Date()
+                        createdAt: new Date(),
+                        displayName: user.displayName || '',
+                        firstName: user.displayName ? user.displayName.split(' ')[0] : '',
+                        lastName: user.displayName && user.displayName.split(' ').length > 1 ? user.displayName.split(' ').slice(1).join(' ') : ''
                     };
                     await setDoc(userDocRef, newUser);
                 } else {
@@ -56,6 +59,20 @@ export const AuthProvider = ({ children }) => {
                     const currentEmailLower = user.email ? user.email.toLowerCase() : null;
                     if (currentEmailLower && (!userData.email || userData.email !== currentEmailLower)) {
                         updates.email = currentEmailLower;
+                    }
+
+                    // Update Name fields if missing or changed
+                    if (user.displayName) {
+                        if (userData.displayName !== user.displayName) {
+                            updates.displayName = user.displayName;
+                        }
+
+                        const nameParts = user.displayName.split(' ');
+                        const newFirst = nameParts[0];
+                        const newLast = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+
+                        if (!userData.firstName) updates.firstName = newFirst;
+                        if (!userData.lastName) updates.lastName = newLast;
                     }
 
                     if (Object.keys(updates).length > 0) {
