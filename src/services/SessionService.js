@@ -1,7 +1,7 @@
 import { db } from '../firebase';
 import { doc, updateDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { updateRatings } from './RatingEngine';
-import { resolveBetsForMatch, refundBetsForMatch } from './BettingService';
+import { resolveBetsForMatch, refundBetsForMatch, settleBetsForSubstitution } from './BettingService';
 
 /**
  * Completes a session by:
@@ -88,6 +88,75 @@ export const completeSession = async (sessionId) => {
 
     } catch (error) {
         console.error("Error in completeSession service:", error);
+        throw error;
+    }
+};
+
+/**
+ * Substitutes a player in an active session.
+ * 1. Replaces player in Session.players list.
+ * 2. Replaces player in all UNPLAYED matches.
+ * 3. Settles bets for those matches (Loss/Refund).
+ * 
+ * @param {string} sessionId 
+ * @param {string} oldPlayerId 
+ * @param {string} newPlayerId 
+ */
+export const substitutePlayer = async (sessionId, oldPlayerId, newPlayerId) => {
+    console.log(`Substituting player ${oldPlayerId} with ${newPlayerId} in session ${sessionId}`);
+
+    try {
+        const sessionRef = doc(db, 'sessions', sessionId);
+        const sessionDoc = await getDoc(sessionRef);
+        if (!sessionDoc.exists()) throw new Error("Session not found");
+
+        const session = sessionDoc.data();
+        const matches = session.matches || [];
+
+        // 1. Identify Unplayed Matches involving Old Player
+        const affectedMatches = matches.filter(m =>
+            (m.team1.includes(oldPlayerId) || m.team2.includes(oldPlayerId)) &&
+            (m.team1Score === undefined && m.team2Score === undefined)
+        );
+
+        console.log(`Found ${affectedMatches.length} affected matches.`);
+
+        // 2. Settle Bets BEFORE modifying matches (so we know which team old player was on)
+        if (affectedMatches.length > 0) {
+            await settleBetsForSubstitution(affectedMatches, oldPlayerId);
+        }
+
+        // 3. Update Matches (Swap ID)
+        const updatedMatches = matches.map(m => {
+            // Only update if it's unplayed and has the player
+            if ((m.team1Score === undefined && m.team2Score === undefined) &&
+                (m.team1.includes(oldPlayerId) || m.team2.includes(oldPlayerId))) {
+
+                const newTeam1 = m.team1.map(id => id === oldPlayerId ? newPlayerId : id);
+                const newTeam2 = m.team2.map(id => id === oldPlayerId ? newPlayerId : id);
+
+                return { ...m, team1: newTeam1, team2: newTeam2 };
+            }
+            return m;
+        });
+
+        // 4. Update Players List
+        const updatedPlayersList = (session.players || []).filter(id => id !== oldPlayerId);
+        if (!updatedPlayersList.includes(newPlayerId)) {
+            updatedPlayersList.push(newPlayerId);
+        }
+
+        // 5. Save to Firestore
+        await updateDoc(sessionRef, {
+            players: updatedPlayersList,
+            matches: updatedMatches
+        });
+
+        console.log("Substitution complete.");
+        return updatedPlayersList;
+
+    } catch (error) {
+        console.error("Error in substitutePlayer:", error);
         throw error;
     }
 };

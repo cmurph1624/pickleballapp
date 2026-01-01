@@ -12,10 +12,33 @@ const HighRollers = () => {
     useEffect(() => {
         const fetchHighRollers = async () => {
             try {
+                // 1. Fetch Users
                 const q = query(collection(db, 'users'), orderBy('walletBalance', 'desc'), limit(20));
                 const snapshot = await getDocs(q);
                 const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setUsers(usersData);
+
+                // 2. Fetch Players to resolve names
+                const playersRef = collection(db, 'players');
+                const playersSnap = await getDocs(playersRef);
+                const playersMap = {}; // Map linkedUserId -> Player Data
+
+                playersSnap.forEach(doc => {
+                    const data = doc.data();
+                    if (data.linkedUserId) {
+                        playersMap[data.linkedUserId] = data;
+                    }
+                });
+
+                // 3. Merge Data
+                const mergedData = usersData.map(user => {
+                    const player = playersMap[user.id]; // user.id is the uid
+                    return {
+                        ...user,
+                        displayName: player ? `${player.firstName} ${player.lastName}` : user.email
+                    };
+                });
+
+                setUsers(mergedData);
             } catch (error) {
                 console.error("Error fetching high rollers:", error);
             } finally {
@@ -85,8 +108,9 @@ const HighRollers = () => {
                                     </div>
                                     <div>
                                         <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
-                                            {user.email} {/* Display Name later */}
+                                            {user.displayName}
                                         </h3>
+                                        {/* Optional: Show email as subtext if needed, or just rank */}
                                         <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Rank #{index + 1}</span>
                                     </div>
                                 </div>

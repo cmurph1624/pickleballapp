@@ -201,3 +201,92 @@ export const refundBetsForMatch = async (matchId) => {
         console.error("Error refunding bets:", error);
     }
 };
+/**
+ * Settles bets when a player is substituted.
+ * Bets on the team WITH the removed player -> LOST (Punitive).
+ * Bets on the OPPPOSING team -> REFUNDED.
+ * @param {Array} matches - List of matches involved in the substitution (unplayed).
+ * @param {string} oldPlayerId - ID of the player being removed.
+ */
+export const settleBetsForSubstitution = async (matches, oldPlayerId) => {
+    console.log(`Settling bets for substitution of player ${oldPlayerId}`);
+
+    try {
+        // Collect all match IDs involved
+        const matchIds = matches.map(m => m.id);
+
+        // Find all OPEN bets for these matches
+        // Note: 'in' query supports up to 10 values. If > 10 matches, we might need multiple queries.
+        // For simplicity assuming < 10 matches usually. If not, we should loop.
+        // Let's loop through matches to be safe and robust.
+
+        for (const match of matches) {
+            const betsQuery = query(
+                collection(db, 'bets'),
+                where('matchId', '==', match.id),
+                where('status', '==', 'OPEN')
+            );
+            const betsSnapshot = await getDocs(betsQuery);
+
+            if (betsSnapshot.empty) continue;
+
+            // Determine which team the old player was on
+            // match.team1 is array of IDs [p1, p2]. existing logic uses array.
+            const isTeam1 = match.team1.includes(oldPlayerId);
+            const oldPlayerTeam = isTeam1 ? 1 : 2;
+
+            const promises = betsSnapshot.docs.map(async (betDoc) => {
+                const bet = betDoc.data();
+                const betId = betDoc.id;
+
+                await runTransaction(db, async (transaction) => {
+                    const userRef = doc(db, 'users', bet.userId);
+                    const betRef = doc(db, 'bets', betId);
+
+                    const userDoc = await transaction.get(userRef);
+                    if (!userDoc.exists()) throw "User not found";
+
+                    const currentBalance = userDoc.data().walletBalance || 0;
+                    let newBalance = currentBalance;
+                    let status = '';
+                    let payout = 0;
+                    let note = '';
+
+                    // Logic:
+                    // If bet.teamPicked === oldPlayerTeam -> LOSS (No refund)
+                    // If bet.teamPicked !== oldPlayerTeam -> REFUND
+                    if (bet.teamPicked === oldPlayerTeam) {
+                        status = 'LOST';
+                        payout = 0;
+                        note = 'Player substitution (Forfeit)';
+                        // Balance unchanged
+                    } else {
+                        status = 'REFUNDED';
+                        payout = bet.amount;
+                        note = 'Opposing player substituted';
+                        newBalance += payout;
+                    }
+
+                    // Update User
+                    if (status === 'REFUNDED') {
+                        transaction.update(userRef, { walletBalance: newBalance });
+                    }
+
+                    // Update Bet
+                    transaction.update(betRef, {
+                        status: status,
+                        resolvedAt: new Date(),
+                        payout: payout,
+                        note: note
+                    });
+                });
+            });
+
+            await Promise.all(promises);
+        }
+        console.log("Bets settled for substitution.");
+    } catch (error) {
+        console.error("Error settling bets for substitution:", error);
+        throw error; // Propagate error to warn user
+    }
+};

@@ -7,13 +7,15 @@ import { calculateSpread } from '../services/Oddsmaker';
 import { validateSchedule } from '../utils/scheduleValidator';
 import { useAuth } from '../contexts/AuthContext';
 import { useClub } from '../contexts/ClubContext';
-import { completeSession } from '../services/SessionService';
+import { completeSession, substitutePlayer } from '../services/SessionService';
 import { calculateStandings } from '../utils/standingsCalculator';
 
 import ScoreModal from '../components/ScoreModal';
 import PlaceBetModal from '../components/PlaceBetModal';
 import MatchFrequencyModal from '../components/MatchFrequencyModal';
 import SessionScorecard from '../components/SessionScorecard';
+import SubstitutePlayerModal from '../components/SubstitutePlayerModal';
+
 import ReviewBetsModal from '../components/ReviewBetsModal';
 
 const SessionDetails = () => {
@@ -23,6 +25,7 @@ const SessionDetails = () => {
     const navigate = useNavigate();
     const [session, setSession] = useState(null);
     const [players, setPlayers] = useState([]);
+    const [allAvailablePlayers, setAllAvailablePlayers] = useState([]);
     const [matches, setMatches] = useState([]);
     const [loading, setLoading] = useState(true);
     const [matchmakingMode, setMatchmakingMode] = useState('STRICT_SOCIAL');
@@ -41,6 +44,9 @@ const SessionDetails = () => {
     // Review Bets Modal State
     const [reviewBetsModalOpen, setReviewBetsModalOpen] = useState(false);
     const [selectedReviewMatch, setSelectedReviewMatch] = useState(null);
+
+    // Substitute Modal State
+    const [substituteModalOpen, setSubstituteModalOpen] = useState(false);
 
     const [currentTab, setCurrentTab] = useState(0); // 0: Matches, 1: Standings
     const [standings, setStandings] = useState([]);
@@ -65,6 +71,7 @@ const SessionDetails = () => {
                     const playersQuery = query(collection(db, 'players'));
                     const playersSnap = await getDocs(playersQuery);
                     const allPlayers = playersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    setAllAvailablePlayers(allPlayers);
                     const sessionPlayers = allPlayers.filter(p => sessionData.players.includes(p.id));
                     setPlayers(sessionPlayers);
                 }
@@ -196,6 +203,32 @@ const SessionDetails = () => {
         } catch (error) {
             console.error("Error completing session:", error);
             alert("Error completing session: " + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSubstitutePlayer = async (playerOutId, playerInId) => {
+        try {
+            setLoading(true);
+            await substitutePlayer(sessionId, playerOutId, playerInId);
+
+            // Reload data to reflect all changes (players, matches, bets)
+            // Re-fetch Session
+            const sessionDoc = await getDoc(doc(db, 'sessions', sessionId));
+            const sessionData = { id: sessionDoc.id, ...sessionDoc.data() };
+            setSession(sessionData);
+            setMatches(sessionData.matches || []);
+
+            // Re-calc players
+            const newSessionPlayers = allAvailablePlayers.filter(p => sessionData.players.includes(p.id));
+            setPlayers(newSessionPlayers);
+
+            alert("Player substituted successfully. Bets have been settled.");
+            setSubstituteModalOpen(false);
+        } catch (error) {
+            console.error("Error substituting player:", error);
+            alert("Error substituting player: " + error.message);
         } finally {
             setLoading(false);
         }
@@ -347,6 +380,12 @@ const SessionDetails = () => {
                                 <div className="flex gap-2">
                                     {matches.length > 0 && (
                                         <>
+                                            <button
+                                                onClick={() => setSubstituteModalOpen(true)}
+                                                className="border border-orange-200 text-orange-600 hover:bg-orange-50 dark:border-orange-900/50 dark:text-orange-400 dark:hover:bg-orange-900/20 px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1 transition-colors"
+                                            >
+                                                Swap Player
+                                            </button>
                                             <button
                                                 onClick={() => setFrequencyModalOpen(true)}
                                                 className="border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1 transition-colors"
@@ -614,6 +653,14 @@ const SessionDetails = () => {
                     match={selectedReviewMatch}
                     team1Name={selectedReviewMatch ? getTeamNames(selectedReviewMatch).team1 : ''}
                     team2Name={selectedReviewMatch ? getTeamNames(selectedReviewMatch).team2 : ''}
+                />
+
+                <SubstitutePlayerModal
+                    open={substituteModalOpen}
+                    onClose={() => setSubstituteModalOpen(false)}
+                    onConfirm={handleSubstitutePlayer}
+                    sessionPlayers={players}
+                    allPlayers={allAvailablePlayers}
                 />
             </div>
         </div>
