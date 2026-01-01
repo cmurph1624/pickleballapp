@@ -598,7 +598,7 @@ const SessionDetails = () => {
                     weekId={sessionId}
                     team1Name={selectedBetMatch ? getTeamNames(selectedBetMatch).team1 : ''}
                     team2Name={selectedBetMatch ? getTeamNames(selectedBetMatch).team2 : ''}
-                    userWallet={currentUser ? (currentUser.walletBalance || 1000) : 0}
+                    userWallet={currentUser ? (currentUser.walletBalance ?? 0) : 0}
                 />
 
                 <MatchFrequencyModal

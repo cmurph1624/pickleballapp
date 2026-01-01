@@ -52,7 +52,7 @@ const PlaceBetModal = ({ open, onClose, match, weekId, team1Name, team2Name, use
         }
 
         if (betAmount > userWallet) {
-            setError("Insufficient funds.");
+            setError("You do not have enough money in your wallet to place a bet");
             return;
         }
 
@@ -67,7 +67,7 @@ const PlaceBetModal = ({ open, onClose, match, weekId, team1Name, team2Name, use
 
                 const currentBalance = userDoc.data().walletBalance || 0;
                 if (betAmount > currentBalance) {
-                    throw "Insufficient funds";
+                    throw "You do not have enough money in your wallet to place a bet";
                 }
 
                 const newBalance = currentBalance - betAmount;
@@ -171,8 +171,8 @@ const PlaceBetModal = ({ open, onClose, match, weekId, team1Name, team2Name, use
                                         type="button"
                                         onClick={() => setTeamPicked('1')}
                                         className={`w-full p-3 rounded-xl border-2 transition-all flex justify-between items-center ${teamPicked === '1'
-                                                ? 'border-primary bg-primary/5 text-primary'
-                                                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                                            ? 'border-primary bg-primary/5 text-primary'
+                                            : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
                                             }`}
                                     >
                                         <span className={`font-bold ${teamPicked === '1' ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}>{team1Name}</span>
@@ -185,8 +185,8 @@ const PlaceBetModal = ({ open, onClose, match, weekId, team1Name, team2Name, use
                                         type="button"
                                         onClick={() => setTeamPicked('2')}
                                         className={`w-full p-3 rounded-xl border-2 transition-all flex justify-between items-center ${teamPicked === '2'
-                                                ? 'border-primary bg-primary/5 text-primary'
-                                                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                                            ? 'border-primary bg-primary/5 text-primary'
+                                            : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
                                             }`}
                                     >
                                         <span className={`font-bold ${teamPicked === '2' ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}>{team2Name}</span>
@@ -212,7 +212,6 @@ const PlaceBetModal = ({ open, onClose, match, weekId, team1Name, team2Name, use
                                     <input
                                         type="number"
                                         min="1"
-                                        max={userWallet}
                                         value={amount}
                                         onChange={(e) => setAmount(e.target.value)}
                                         className="w-full pl-8 pr-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-surface-light dark:bg-gray-900/50 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all font-bold"
