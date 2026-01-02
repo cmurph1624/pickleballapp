@@ -1,0 +1,4 @@
+firebase-functions
+firebase-admin
+google-cloud-firestore
+google-generativeai>=0.8.3
