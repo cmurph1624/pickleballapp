@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, updateDoc, collection, query, getDocs, limit, where } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, getDocs, limit, where, onSnapshot, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase';
 import { generateMatches } from '../utils/matchGenerator';
 import { calculateSpread } from '../services/Oddsmaker';
@@ -54,44 +54,56 @@ const SessionDetails = () => {
     const [hasBets, setHasBets] = useState(false);
 
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                // Fetch Session
-                const sessionDoc = await getDoc(doc(db, 'sessions', sessionId));
-                if (!sessionDoc.exists()) {
-                    navigate('/');
-                    return;
-                }
-                const sessionData = { id: sessionDoc.id, ...sessionDoc.data() };
-                setSession(sessionData);
-                setMatches(sessionData.matches || []);
+        setLoading(true);
 
-                // Fetch Players
-                if (sessionData.players && sessionData.players.length > 0) {
+        // 1. Session Listener
+        const sessionRef = doc(db, 'sessions', sessionId);
+        const unsubscribeSession = onSnapshot(sessionRef, async (docSnap) => {
+            if (!docSnap.exists()) {
+                navigate('/');
+                return;
+            }
+            const sessionData = { id: docSnap.id, ...docSnap.data() };
+            setSession(sessionData);
+            setMatches(sessionData.matches || []);
+
+            // Fetch Players if needed (diffing could be optimized, but this is safe)
+            if (sessionData.players && sessionData.players.length > 0) {
+                try {
+                    // optimization: only fetch if players changed or not yet loaded
                     const playersQuery = query(collection(db, 'players'));
                     const playersSnap = await getDocs(playersQuery);
                     const allPlayers = playersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
                     setAllAvailablePlayers(allPlayers);
                     const sessionPlayers = allPlayers.filter(p => sessionData.players.includes(p.id));
                     setPlayers(sessionPlayers);
+                } catch (err) {
+                    console.error("Error fetching players in snapshot:", err);
                 }
-
-                // Check for ANY bets on this session
-                const betsQuery = query(
-                    collection(db, 'bets'),
-                    where('weekId', '==', sessionId),
-                    limit(1)
-                );
-                const betsSnap = await getDocs(betsQuery);
-                setHasBets(!betsSnap.empty);
-
-            } catch (error) {
-                console.error("Error fetching data:", error);
-            } finally {
-                setLoading(false);
             }
+            setLoading(false);
+        }, (error) => {
+            console.error("Error listening to session:", error);
+            setLoading(false);
+        });
+
+        // 2. Bets Listener (to lock generation if bets exist)
+        const betsQuery = query(
+            collection(db, 'bets'),
+            where('weekId', '==', sessionId),
+            limit(1)
+        );
+        const unsubscribeBets = onSnapshot(betsQuery, (snapshot) => {
+            setHasBets(!snapshot.empty);
+        }, (error) => {
+            console.error("Error listening to bets:", error);
+        });
+
+        // Cleanup listeners on unmount
+        return () => {
+            unsubscribeSession();
+            unsubscribeBets();
         };
-        fetchData();
     }, [sessionId, navigate]);
 
     // Calculate Standings whenever matches/players change
@@ -167,18 +179,25 @@ const SessionDetails = () => {
     };
 
     const handleSaveScore = async (matchId, team1Score, team2Score) => {
-        const updatedMatches = matches.map(m => {
-            if (m.id === matchId) {
-                return { ...m, team1Score, team2Score };
-            }
-            return m;
-        });
-        setMatches(updatedMatches);
-
         try {
-            await updateDoc(doc(db, 'sessions', sessionId), {
-                matches: updatedMatches
+            await runTransaction(db, async (transaction) => {
+                const sessionRef = doc(db, 'sessions', sessionId);
+                const sessionDoc = await transaction.get(sessionRef);
+                if (!sessionDoc.exists()) {
+                    throw new Error("Session does not exist!");
+                }
+
+                const currentMatches = sessionDoc.data().matches || [];
+                const updatedMatches = currentMatches.map(m => {
+                    if (m.id === matchId) {
+                        return { ...m, team1Score, team2Score };
+                    }
+                    return m;
+                });
+
+                transaction.update(sessionRef, { matches: updatedMatches });
             });
+            // setMatches is not needed because onSnapshot listener will update the state
         } catch (error) {
             console.error("Error saving score:", error);
             alert("Error saving score: " + error.message);
