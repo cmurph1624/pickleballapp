@@ -149,6 +149,30 @@ const SessionModal = ({ open, onClose, session, league, clubId }) => {
 
         try {
             if (session) {
+                // Detect Promoted Players
+                const originalWaitlist = session.waitlist || [];
+                const newPlayers = data.players || [];
+
+                // Find players who were in original waitlist AND are now in new players list
+                const promotedPlayers = originalWaitlist.filter(id => newPlayers.includes(id));
+
+                if (promotedPlayers.length > 0) {
+                    // Send notifications
+                    const notificationPromises = promotedPlayers.map(playerId => {
+                        const playerDoc = leaguePlayers.find(p => p.id === playerId);
+                        const targetUserId = playerDoc ? (playerDoc.linkedUserId || playerId) : playerId;
+
+                        return addDoc(collection(db, 'notifications'), {
+                            userId: targetUserId,
+                            message: `You have been promoted from the waitlist for session ${data.name || 'your session'} on ${data.scheduledDate ? new Date(data.scheduledDate).toLocaleDateString() : 'scheduled date'}!`,
+                            type: 'success',
+                            read: false,
+                            timestamp: new Date().toISOString()
+                        });
+                    });
+                    await Promise.all(notificationPromises);
+                }
+
                 await updateDoc(doc(db, 'sessions', session.id), data);
             } else {
                 data.createdAt = new Date();

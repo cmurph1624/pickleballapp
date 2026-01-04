@@ -18,6 +18,7 @@ import HomeRedirect from './pages/HomeRedirect';
 import JoinClub from './pages/JoinClub';
 import ClubInvite from './pages/ClubInvite';
 import { ClubProvider } from './contexts/ClubContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import { Outlet } from 'react-router-dom';
 import ClubDashboard from './pages/ClubDashboard';
 
@@ -26,33 +27,35 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
-        <Router>
-          <Routes>
-            {/* Root Route: Redirects or shows generic dashboard */}
-            <Route path="/" element={<HomeRedirect />} />
-            <Route path="/join/:clubId" element={<Layout><JoinClub /></Layout>} />
+        <NotificationProvider>
+          <Router>
+            <Routes>
+              {/* Root Route: Redirects or shows generic dashboard */}
+              <Route path="/" element={<HomeRedirect />} />
+              <Route path="/join/:clubId" element={<Layout><JoinClub /></Layout>} />
 
-            {/* Club Routes (With Club Context) */}
-            <Route path="/clubs/:clubId" element={
-              <ClubProvider>
-                <DashboardLayout>
-                  <Outlet />
-                </DashboardLayout>
-              </ClubProvider>
-            }>
-              <Route path="leagues" element={<Leagues />} />
-              <Route path="players" element={<Players />} />
-              <Route path="high-rollers" element={<HighRollers />} />
-              <Route path="calendar" element={<Calendar />} />
-              <Route path="chat" element={<Chat />} />
-              <Route path="leagues/:id" element={<LeagueDetails />} />
-              <Route path="leagues/:leagueId/sessions/:sessionId" element={<SessionDetails />} />
-              <Route path="sessions/:sessionId" element={<SessionDetails />} />
-              <Route path="invite" element={<ClubInvite />} />
-            </Route>
-          </Routes>
-          <ChatWidget />
-        </Router>
+              {/* Club Routes (With Club Context) */}
+              <Route path="/clubs/:clubId" element={
+                <ClubProvider>
+                  <DashboardLayout>
+                    <Outlet />
+                  </DashboardLayout>
+                </ClubProvider>
+              }>
+                <Route path="leagues" element={<Leagues />} />
+                <Route path="players" element={<Players />} />
+                <Route path="high-rollers" element={<HighRollers />} />
+                <Route path="calendar" element={<Calendar />} />
+                <Route path="chat" element={<Chat />} />
+                <Route path="leagues/:id" element={<LeagueDetails />} />
+                <Route path="leagues/:leagueId/sessions/:sessionId" element={<SessionDetails />} />
+                <Route path="sessions/:sessionId" element={<SessionDetails />} />
+                <Route path="invite" element={<ClubInvite />} />
+              </Route>
+            </Routes>
+            <ChatWidget />
+          </Router>
+        </NotificationProvider>
       </AuthProvider>
     </ThemeProvider>
   );

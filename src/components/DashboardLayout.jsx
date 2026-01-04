@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
+import NotificationBell from './NotificationBell';
 
 const DashboardLayout = ({ children }) => {
     const { currentUser, logout } = useAuth();
@@ -187,10 +188,7 @@ const DashboardLayout = ({ children }) => {
                         <h1 className="text-lg font-semibold tracking-wide">Pickleball League</h1>
                     </div>
                     <div className="flex items-center gap-3">
-                        <button className="relative p-1 rounded-full hover:bg-white/10 transition">
-                            <span className="material-symbols-outlined">notifications</span>
-                            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border border-sidebar-dark"></span>
-                        </button>
+                        <NotificationBell />
                         <div
                             className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-sm font-bold border-2 border-white/20 cursor-pointer hover:opacity-80 transition"
                             onClick={handleAvatarClick}

@@ -256,7 +256,24 @@ export const leaveSession = async (sessionId, playerId) => {
                         const promotedPlayerId = waitlist[0];
                         waitlist = waitlist.slice(1);
                         players.push(promotedPlayerId);
-                        // TODO: Notify promoted user? (Out of scope for now)
+
+                        // Notify promoted user
+                        const promotedPlayerRef = doc(db, 'players', promotedPlayerId);
+                        transaction.get(promotedPlayerRef).then(playerSnap => {
+                            if (playerSnap.exists()) {
+                                const linkedUserId = playerSnap.data().linkedUserId;
+                                if (linkedUserId) {
+                                    const newNotifRef = doc(collection(db, 'notifications'));
+                                    transaction.set(newNotifRef, {
+                                        userId: linkedUserId,
+                                        message: `You have been promoted from the waitlist for session ${session.date || ''} ${session.time || ''} at ${session.location || 'the club'}!`,
+                                        type: 'success',
+                                        read: false,
+                                        timestamp: new Date().toISOString()
+                                    });
+                                }
+                            }
+                        }).catch(err => console.error("Error fetching player for notification", err));
                     }
                 }
             } else {
