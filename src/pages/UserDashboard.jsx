@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { collection, query, where, getDocs, limit, deleteDoc, doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { collection, query, where, getDocs, limit, deleteDoc, doc, getDoc, updateDoc, arrayUnion, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
+import { joinSession, leaveSession } from '../services/SessionService';
 
 const UserDashboard = () => {
     const { currentUser } = useAuth();
@@ -19,6 +20,8 @@ const UserDashboard = () => {
     const [activeTab, setActiveTab] = useState('matches');
 
     useEffect(() => {
+        let unsubscribeSessions = null;
+
         const fetchData = async () => {
             if (!currentUser) return;
 
@@ -34,55 +37,57 @@ const UserDashboard = () => {
                     setLinkedPlayerId(playerId);
                 }
 
-                // 2. Fetch All Sessions (We need all to filter for "Available" vs "Mine")
+                // 2. Fetch All Sessions (Real-time listener)
                 const sessionsRef = collection(db, 'sessions');
-
-                // Fetch all sessions. 'archived' filter removed because some docs might miss the field.
                 const qSessions = query(sessionsRef);
 
-                const sessionsSnap = await getDocs(qSessions);
-                console.log(`Debug: Fetched ${sessionsSnap.size} total sessions from Firestore.`);
+                unsubscribeSessions = onSnapshot(qSessions, (sessionsSnap) => {
+                    console.log(`Debug: Received ${sessionsSnap.size} session updates from Firestore.`);
 
-                const now = new Date();
-                const allFetchedSessions = sessionsSnap.docs
-                    .map(doc => ({ id: doc.id, ...doc.data() }))
-                    .filter(s => {
-                        if (s.archived) return false; // Exclude archived sessions client-side
-                        if (!s.scheduledDate) return false;
-                        return true;
-                    })
-                    .sort((a, b) => {
-                        const dateA = a.scheduledDate.toDate ? a.scheduledDate.toDate() : new Date(a.scheduledDate);
-                        const dateB = b.scheduledDate.toDate ? b.scheduledDate.toDate() : new Date(b.scheduledDate);
-                        return dateA - dateB;
+                    const now = new Date();
+                    const allFetchedSessions = sessionsSnap.docs
+                        .map(doc => ({ id: doc.id, ...doc.data() }))
+                        .filter(s => {
+                            if (s.archived) return false;
+                            if (!s.scheduledDate) return false;
+                            return true;
+                        })
+                        .sort((a, b) => {
+                            const dateA = a.scheduledDate.toDate ? a.scheduledDate.toDate() : new Date(a.scheduledDate);
+                            const dateB = b.scheduledDate.toDate ? b.scheduledDate.toDate() : new Date(b.scheduledDate);
+                            return dateA - dateB;
+                        });
+
+                    // Filter: My Sessions vs Available Sessions
+                    const mySess = [];
+                    const availSess = [];
+
+                    allFetchedSessions.forEach(session => {
+                        const isPlayerIn = playerId && (
+                            (session.players && session.players.includes(playerId)) ||
+                            (session.waitlist && session.waitlist.includes(playerId))
+                        );
+
+                        // Helper to get date object
+                        const d = session.scheduledDate.toDate ? session.scheduledDate.toDate() : new Date(session.scheduledDate);
+                        const isFuture = d > now;
+
+                        if (isPlayerIn) {
+                            mySess.push(session);
+                        } else if (isFuture) {
+                            // Only future sessions are "Available" to join
+                            availSess.push(session);
+                        }
                     });
 
-                console.log(`Debug: ${allFetchedSessions.length} sessions remain after filtering invalid/archived.`);
-                console.log(`Debug: Current linkedPlayerId is ${playerId}`);
-
-                // Filter: My Sessions vs Available Sessions
-                const mySess = [];
-                const availSess = [];
-
-                allFetchedSessions.forEach(session => {
-                    const isPlayerIn = playerId && session.players && session.players.includes(playerId);
-
-                    // Helper to get date object
-                    const d = session.scheduledDate.toDate ? session.scheduledDate.toDate() : new Date(session.scheduledDate);
-                    const isFuture = d > now;
-
-                    if (isPlayerIn) {
-                        mySess.push(session);
-                    } else if (isFuture) {
-                        // Only future sessions are "Available" to join
-                        availSess.push(session);
-                    }
+                    console.log(`Debug: Found ${mySess.length} My Sessions and ${availSess.length} Available Sessions.`);
+                    setMySessions(mySess);
+                    setAvailableSessions(availSess);
+                    setLoading(false); // Stop loading once we have data
+                }, (error) => {
+                    console.error("Error listening to sessions:", error);
+                    setLoading(false);
                 });
-
-                console.log(`Debug: Found ${mySess.length} My Sessions and ${availSess.length} Available Sessions.`);
-
-                setMySessions(mySess);
-                setAvailableSessions(availSess);
 
                 // 3. Fetch Open Bets & Resolve Details
                 const betsRef = collection(db, 'bets');
@@ -149,7 +154,6 @@ const UserDashboard = () => {
 
             } catch (error) {
                 console.error("Error fetching dashboard data:", error);
-            } finally {
                 setLoading(false);
             }
         };
@@ -157,7 +161,9 @@ const UserDashboard = () => {
         fetchData();
 
         return () => {
-            // No unsubscribe
+            if (unsubscribeSessions) {
+                unsubscribeSessions();
+            }
         };
     }, [currentUser]);
 
@@ -201,34 +207,64 @@ const UserDashboard = () => {
             return;
         }
 
-        if (!window.confirm("Are you sure you want to join this session?")) return;
+        const sessionToJoin = availableSessions.find(s => s.id === sessionId);
+        const isWaitlist = sessionToJoin && sessionToJoin.playerLimit > 0 && (sessionToJoin.players || []).length >= sessionToJoin.playerLimit;
+
+        const actionText = isWaitlist ? "join the WAITLIST for" : "join";
+
+        if (!window.confirm(`Are you sure you want to ${actionText} this session?`)) return;
 
         try {
-            // 1. Update Firestore
-            const sessionRef = doc(db, 'sessions', sessionId);
-            await updateDoc(sessionRef, {
-                players: arrayUnion(linkedPlayerId)
-            });
+            // Use Service
+            const status = await joinSession(sessionId, linkedPlayerId);
 
-            // 2. Optimistic Update
-            const sessionToJoin = availableSessions.find(s => s.id === sessionId);
-            if (sessionToJoin) {
+            // Optimistic Update / Refresh
+            // For simplicity, we'll remove it from available sessions or update the list.
+            // But since we need to show "My Sessions" update, manual state update is tricky with waitlist.
+            // Ideally we re-fetch or use onSnapshot.
+            // For now, let's just do a simple update or reload.
+
+            // To be safe and see correct status, let's remove from available and add to mySessions (if joined)
+            // If waitlisted, it might also show in mySessions depending on logic?
+            // "My Sessions" filter checks: isPlayerIn = playerId && session.players && session.players.includes(playerId);
+            // It DOES NOT check waitlist. 
+            // So if waitlisted, it won't show in "My Sessions" with current logic.
+            // We should probably update "My Sessions" filter to include waitlisted sessions.
+
+            // Actually, let's just reload the page/data for correctness as we are not using listeners here.
+            // Or better, trigger a re-fetch.
+            // Re-fetch logic is inside useEffect, hard to trigger from here without refactor.
+            // We'll update state manually for "Joined", but for "Waitlisted" maybe we show an alert.
+
+            if (status === 'JOINED') {
                 setAvailableSessions(prev => prev.filter(s => s.id !== sessionId));
-
-                // Add to mySessions and maintain sort order
-                const newMySessions = [...mySessions, sessionToJoin].sort((a, b) => {
-                    const dateA = a.scheduledDate.toDate ? a.scheduledDate.toDate() : new Date(a.scheduledDate);
-                    const dateB = b.scheduledDate.toDate ? b.scheduledDate.toDate() : new Date(b.scheduledDate);
-                    return dateA - dateB;
-                });
-                setMySessions(newMySessions);
+                // Add to mySessions logic (omitted for brevity, assume reload or simple add)
+                alert("Successfully joined the session!");
+                window.location.reload(); // Simple refresh to ensure all states (including mySessions) are correct
+            } else if (status === 'WAITLISTED') {
+                alert("You have been added to the waitlist.");
+                window.location.reload();
             }
-
-            alert("Successfully joined the session!");
 
         } catch (error) {
             console.error("Error joining session:", error);
             alert("Failed to join session: " + error.message);
+        }
+    };
+
+    const handleLeaveSession = async (e, sessionId) => {
+        e.stopPropagation();
+        if (!linkedPlayerId) return;
+
+        if (!window.confirm("Are you sure you want to LEAVE this session?")) return;
+
+        try {
+            await leaveSession(sessionId, linkedPlayerId);
+            // Optimistic update not needed heavily due to onSnapshot, but we can alert
+            alert("You have left the session.");
+        } catch (error) {
+            console.error("Error leaving session:", error);
+            alert("Failed to leave session: " + error.message);
         }
     };
 
@@ -262,8 +298,8 @@ const UserDashboard = () => {
                 <button
                     onClick={() => setActiveTab('matches')}
                     className={`pb-2 px-1 text-sm font-medium transition-colors relative ${activeTab === 'matches'
-                            ? 'text-primary border-b-2 border-primary'
-                            : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                        ? 'text-primary border-b-2 border-primary'
+                        : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
                         }`}
                 >
                     Matches
@@ -271,8 +307,8 @@ const UserDashboard = () => {
                 <button
                     onClick={() => setActiveTab('betting')}
                     className={`pb-2 px-1 text-sm font-medium transition-colors relative ${activeTab === 'betting'
-                            ? 'text-primary border-b-2 border-primary'
-                            : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                        ? 'text-primary border-b-2 border-primary'
+                        : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
                         }`}
                 >
                     Betting
@@ -321,13 +357,31 @@ const UserDashboard = () => {
                                                 <span>{time}</span>
                                             </div>
 
-                                            <button
-                                                onClick={(e) => handleJoinSession(e, session.id)}
-                                                className="mt-4 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2"
-                                            >
-                                                <span className="material-symbols-outlined text-lg">person_add</span>
-                                                Sign Up for Session
-                                            </button>
+                                            {(() => {
+                                                const playersCount = (session.players || []).length;
+                                                const limit = session.playerLimit || 0;
+                                                const isFull = limit > 0 && playersCount >= limit;
+                                                const waitlistCount = (session.waitlist || []).length;
+
+                                                return (
+                                                    <div className="mt-4">
+                                                        <div className="flex justify-between text-xs mb-1 text-gray-500 dark:text-gray-400">
+                                                            <span>{limit > 0 ? `${playersCount} / ${limit} Players` : `${playersCount} Players`}</span>
+                                                            {waitlistCount > 0 && <span className="text-orange-600 font-bold">{waitlistCount} on Waitlist</span>}
+                                                        </div>
+                                                        <button
+                                                            onClick={(e) => handleJoinSession(e, session.id)}
+                                                            className={`w-full font-bold py-2 px-4 rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2 relative z-10 ${isFull
+                                                                ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/50"
+                                                                : "bg-green-600 hover:bg-green-700 text-white"
+                                                                }`}
+                                                        >
+                                                            <span className="material-symbols-outlined text-lg">{isFull ? "hourglass_empty" : "person_add"}</span>
+                                                            {isFull ? "Join Waitlist" : "Sign Up for Session"}
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                     );
                                 })}
@@ -384,7 +438,7 @@ const UserDashboard = () => {
                                                         </span>
                                                     ) : (
                                                         <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-bold px-2 py-1 rounded uppercase tracking-wide">
-                                                            Next Match
+                                                            {session.waitlist && session.waitlist.includes(linkedPlayerId) ? "Waitlisted" : "Next Match"}
                                                         </span>
                                                     )}
 
@@ -401,7 +455,35 @@ const UserDashboard = () => {
                                                 <span className="material-symbols-outlined text-lg">schedule</span>
                                                 <span>{time}</span>
                                             </div>
-                                            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mt-1">
+
+                                            {/* Player Counts & Leave Action - Only for future/upcoming */}
+                                            {!isPast && (
+                                                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                                                            {session.playerLimit > 0
+                                                                ? <>{(session.players || []).length} <span className="text-gray-400">/</span> {session.playerLimit} Players</>
+                                                                : <>{(session.players || []).length} Players</>
+                                                            }
+                                                            {session.waitlist && session.waitlist.length > 0 && (
+                                                                <span className="ml-2 text-orange-600 font-bold">
+                                                                    (+{session.waitlist.length} Waitlist)
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <button
+                                                        onClick={(e) => handleLeaveSession(e, session.id)}
+                                                        className="w-full py-1.5 px-3 rounded-lg border border-red-200 dark:border-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center justify-center gap-1"
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">logout</span>
+                                                        Leave Session
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mt-2">
                                                 <span className="material-symbols-outlined text-lg">location_on</span>
                                                 <span>Court TBD</span>
                                             </div>

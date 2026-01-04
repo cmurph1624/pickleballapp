@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { doc, updateDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, collection, query, where, getDocs, runTransaction } from 'firebase/firestore';
 import { updateRatings } from './RatingEngine';
 import { resolveBetsForMatch, refundBetsForMatch, settleBetsForSubstitution } from './BettingService';
 
@@ -157,6 +157,119 @@ export const substitutePlayer = async (sessionId, oldPlayerId, newPlayerId) => {
 
     } catch (error) {
         console.error("Error in substitutePlayer:", error);
+        throw error;
+    }
+};
+/**
+ * Allows a player to join a session.
+ * Handles player limits and waitlisting automatically.
+ * 
+ * @param {string} sessionId 
+ * @param {string} playerId 
+ * @returns {Promise<string>} - Status message ("JOINED" or "WAITLISTED")
+ */
+export const joinSession = async (sessionId, playerId) => {
+    try {
+        return await runTransaction(db, async (transaction) => {
+            const sessionRef = doc(db, 'sessions', sessionId);
+            const sessionDoc = await transaction.get(sessionRef);
+
+            if (!sessionDoc.exists()) {
+                throw new Error("Session does not exist!");
+            }
+
+            const session = sessionDoc.data();
+            const players = session.players || [];
+            const waitlist = session.waitlist || [];
+            const playerLimit = session.playerLimit || 0; // 0 means no limit (or huge limit)
+
+            // Check if already joined
+            if (players.includes(playerId)) {
+                throw new Error("You have already joined this session.");
+            }
+            if (waitlist.includes(playerId)) {
+                throw new Error("You are already on the waitlist.");
+            }
+
+            // Logic:
+            // 1. If limit is set AND players count >= limit -> Add to Waitlist
+            // 2. Else -> Add to Players
+
+            if (playerLimit > 0 && players.length >= playerLimit) {
+                // Add to Waitlist
+                const newWaitlist = [...waitlist, playerId];
+                transaction.update(sessionRef, { waitlist: newWaitlist });
+                return "WAITLISTED";
+            } else {
+                // Add to Players
+                const newPlayers = [...players, playerId];
+                transaction.update(sessionRef, { players: newPlayers });
+                return "JOINED";
+            }
+        });
+    } catch (error) {
+        console.error("Error joining session:", error);
+        throw error;
+    }
+};
+
+/**
+ * Allows a player to leave a session.
+ * Automatically promotes the next person on the waitlist if a spot opens up.
+ * 
+ * @param {string} sessionId 
+ * @param {string} playerId 
+ */
+export const leaveSession = async (sessionId, playerId) => {
+    try {
+        await runTransaction(db, async (transaction) => {
+            const sessionRef = doc(db, 'sessions', sessionId);
+            const sessionDoc = await transaction.get(sessionRef);
+
+            if (!sessionDoc.exists()) {
+                throw new Error("Session does not exist!");
+            }
+
+            const session = sessionDoc.data();
+            let players = session.players || [];
+            let waitlist = session.waitlist || [];
+            const playerLimit = session.playerLimit || 0;
+
+            const wasInPlayers = players.includes(playerId);
+            const wasInWaitlist = waitlist.includes(playerId);
+
+            if (!wasInPlayers && !wasInWaitlist) {
+                throw new Error("You are not part of this session.");
+            }
+
+            // Remove player
+            if (wasInPlayers) {
+                players = players.filter(id => id !== playerId);
+
+                // Promote from waitlist if there is a limit and we dropped below it (which we did by leaving)
+                // Actually, just check if waitlist has anyone.
+                if (waitlist.length > 0) {
+                    // Check limit just in case, but if they were in players, limit was likely met or not set.
+                    // If limit is 0 (unlimited), waitlist shouldn't exist, but safe to promote if it does.
+                    // If limit exists and we have space now...
+                    if (players.length < playerLimit || playerLimit === 0) {
+                        const promotedPlayerId = waitlist[0];
+                        waitlist = waitlist.slice(1);
+                        players.push(promotedPlayerId);
+                        // TODO: Notify promoted user? (Out of scope for now)
+                    }
+                }
+            } else {
+                waitlist = waitlist.filter(id => id !== playerId);
+            }
+
+            transaction.update(sessionRef, {
+                players: players,
+                waitlist: waitlist
+            });
+        });
+    } catch (error) {
+        console.error("Error leaving session:", error);
         throw error;
     }
 };

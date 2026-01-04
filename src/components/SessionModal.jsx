@@ -10,7 +10,10 @@ const SessionModal = ({ open, onClose, session, league, clubId }) => {
         bettingDeadline: '',
         scheduledDate: '',
         courtCount: '',
-        courtNames: ''
+        courtNames: '',
+
+        playerLimit: '',
+        waitlist: []
     });
     const [leaguePlayers, setLeaguePlayers] = useState([]);
 
@@ -46,7 +49,9 @@ const SessionModal = ({ open, onClose, session, league, clubId }) => {
                 bettingDeadline: session.bettingDeadline || '',
                 scheduledDate: session.scheduledDate || '',
                 courtCount: session.courts ? session.courts.length : '',
-                courtNames: session.courts ? session.courts.join(', ') : ''
+                courtNames: session.courts ? session.courts.join(', ') : '',
+                playerLimit: session.playerLimit || '',
+                waitlist: session.waitlist || []
             });
         } else {
             setFormData({
@@ -56,7 +61,9 @@ const SessionModal = ({ open, onClose, session, league, clubId }) => {
                 bettingDeadline: '',
                 scheduledDate: '',
                 courtCount: '',
-                courtNames: ''
+                courtNames: '',
+                playerLimit: '',
+                waitlist: []
             });
         }
     }, [session, open]);
@@ -69,10 +76,26 @@ const SessionModal = ({ open, onClose, session, league, clubId }) => {
     const handlePlayerToggle = (playerId) => {
         setFormData(prev => {
             const currentPlayers = prev.players;
+            const currentWaitlist = prev.waitlist || [];
+
             if (currentPlayers.includes(playerId)) {
-                return { ...prev, players: currentPlayers.filter(id => id !== playerId) };
+                // REMOVING A PLAYER
+                let newPlayers = currentPlayers.filter(id => id !== playerId);
+                let newWaitlist = [...currentWaitlist];
+
+                // Auto-promote from waitlist if available (filling the spot)
+                if (newWaitlist.length > 0) {
+                    const promotedPlayerId = newWaitlist.shift(); // Take first from waitlist
+                    newPlayers.push(promotedPlayerId); // Add to players
+                    // Optional: Could set a temp status to highlight this change, but reacting purely on data for now.
+                }
+
+                return { ...prev, players: newPlayers, waitlist: newWaitlist };
             } else {
-                return { ...prev, players: [...currentPlayers, playerId] };
+                // ADDING A PLAYER
+                // If adding, ensure they are removed from waitlist (prevent duplicates)
+                let newWaitlist = currentWaitlist.filter(id => id !== playerId);
+                return { ...prev, players: [...currentPlayers, playerId], waitlist: newWaitlist };
             }
         });
     };
@@ -101,6 +124,9 @@ const SessionModal = ({ open, onClose, session, league, clubId }) => {
             }
         }
 
+        // Ensure players are not on the waitlist (Consistency Check is now handled in toggle, but safe to keep final filter if needed)
+        // However, since we now manage waitlist state locally with promotions, we should trust formData.waitlist
+
         const data = {
             name: formData.name,
             players: formData.players,
@@ -108,6 +134,8 @@ const SessionModal = ({ open, onClose, session, league, clubId }) => {
             bettingDeadline: formData.bettingDeadline,
             scheduledDate: formData.scheduledDate,
             courts: courts,
+            playerLimit: parseInt(formData.playerLimit) || 0,
+            waitlist: formData.waitlist,
             updatedAt: new Date()
         };
 
@@ -233,6 +261,24 @@ const SessionModal = ({ open, onClose, session, league, clubId }) => {
                             </p>
                         </div>
 
+
+
+                        {/* Player Limit */}
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Player Limit <span className="text-xs text-gray-500 font-normal">(0 or empty for unlimited)</span>
+                            </label>
+                            <input
+                                type="number"
+                                name="playerLimit"
+                                min="0"
+                                value={formData.playerLimit}
+                                onChange={handleChange}
+                                placeholder="e.g. 12"
+                                className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-surface-light dark:bg-gray-900/50 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                            />
+                        </div>
+
                         {/* Dates Row */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
@@ -306,6 +352,32 @@ const SessionModal = ({ open, onClose, session, league, clubId }) => {
                                 )}
                             </div>
                         </div>
+
+                        {/* Waitlist Display (Read Only) */}
+                        {formData.waitlist && formData.waitlist.length > 0 && (
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Current Waitlist <span className="text-xs text-gray-500 font-normal">(Ordered by Priority)</span>
+                                </label>
+                                <div className="border border-orange-200 dark:border-orange-900/50 rounded-lg overflow-hidden bg-orange-50 dark:bg-orange-900/20">
+                                    <div className="divide-y divide-orange-200 dark:divide-orange-900/50">
+                                        {formData.waitlist.map((playerId, index) => {
+                                            const player = leaguePlayers.find(p => p.id === playerId);
+                                            return (
+                                                <div key={playerId} className="flex items-center gap-3 p-3">
+                                                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 dark:bg-orange-800 text-orange-700 dark:text-orange-200 text-xs font-bold">
+                                                        {index + 1}
+                                                    </span>
+                                                    <span className="text-sm text-gray-700 dark:text-gray-200">
+                                                        {player ? `${player.firstName} ${player.lastName}` : 'Unknown Player'}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Footer */}
@@ -325,8 +397,8 @@ const SessionModal = ({ open, onClose, session, league, clubId }) => {
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 };
 
