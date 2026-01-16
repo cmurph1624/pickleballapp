@@ -179,6 +179,37 @@ export const joinSession = async (sessionId, playerId) => {
             }
 
             const session = sessionDoc.data();
+
+            // --- Club Membership Validation ---
+            if (session.clubId) {
+                const playerRef = doc(db, 'players', playerId);
+                const playerDoc = await transaction.get(playerRef);
+                if (!playerDoc.exists()) {
+                    throw new Error("Player profile not found.");
+                }
+
+                const playerData = playerDoc.data();
+                const linkedUserId = playerData.linkedUserId;
+
+                if (!linkedUserId) {
+                    throw new Error("Your player profile is not linked to a user account.");
+                }
+
+                const clubRef = doc(db, 'clubs', session.clubId);
+                const clubDoc = await transaction.get(clubRef);
+
+                if (!clubDoc.exists()) {
+                    throw new Error("Club not found.");
+                }
+
+                const clubData = clubDoc.data();
+                const members = clubData.members || [];
+
+                if (!members.includes(linkedUserId)) {
+                    throw new Error("You must be a member of this club to join its sessions.");
+                }
+            }
+
             const players = session.players || [];
             const waitlist = session.waitlist || [];
             const playerLimit = session.playerLimit || 0; // 0 means no limit (or huge limit)

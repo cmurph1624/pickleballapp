@@ -37,7 +37,14 @@ const UserDashboard = () => {
                     setLinkedPlayerId(playerId);
                 }
 
-                // 2. Fetch All Sessions (Real-time listener)
+                // 2. Fetch User's Club Memberships
+                const clubsRef = collection(db, 'clubs');
+                const qClubs = query(clubsRef, where('members', 'array-contains', currentUser.uid));
+                const clubsSnap = await getDocs(qClubs);
+                const userClubIds = clubsSnap.docs.map(d => d.id);
+                console.log("Debug: User is member of clubs:", userClubIds);
+
+                // 3. Fetch All Sessions (Real-time listener)
                 const sessionsRef = collection(db, 'sessions');
                 const qSessions = query(sessionsRef);
 
@@ -76,7 +83,20 @@ const UserDashboard = () => {
                             mySess.push(session);
                         } else if (isFuture) {
                             // Only future sessions are "Available" to join
-                            availSess.push(session);
+                            // CHECK: Is user a member of the session's club?
+                            // Legacy sessions might not have clubId, so we might want to default to true for them OR false.
+                            // Assuming strict mode: must match clubId. 
+                            // If session.clubId is missing, it won't be in userClubIds, so it hides.
+                            if (session.clubId && userClubIds.includes(session.clubId)) {
+                                availSess.push(session);
+                            } else if (!session.clubId) {
+                                // Optional: Handle legacy sessions without clubId. 
+                                // For now, let's show them? Or hide them? 
+                                // User requested "validating they are part of the club". 
+                                // If no clubId, we can't validate. Let's hide them to be safe/strict as requested.
+                                // If they are critical, they should be backfilled.
+                                // console.warn("Session missing clubId, hiding from available:", session.id);
+                            }
                         }
                     });
 

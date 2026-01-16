@@ -140,11 +140,14 @@ const SessionModal = ({ open, onClose, session, league, clubId }) => {
         };
 
         // If league exists, link it. If not, treat as standalone (link to club).
+        // Always link to club
+        data.clubId = clubId;
+
+        // If league exists, link it.
         if (league) {
             data.leagueId = league.id;
         } else {
             data.leagueId = null;
-            data.clubId = clubId;
         }
 
         try {
