@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import ChatWidget from './components/ChatWidget';
+
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { theme } from './theme';
@@ -13,7 +13,7 @@ import LeagueDetails from './pages/LeagueDetails';
 import SessionDetails from './pages/SessionDetails';
 import HighRollers from './pages/HighRollers';
 import Calendar from './pages/Calendar';
-import Chat from './pages/Chat';
+
 import HomeRedirect from './pages/HomeRedirect';
 import JoinClub from './pages/JoinClub';
 import ClubInvite from './pages/ClubInvite';
@@ -46,14 +46,14 @@ function App() {
                 <Route path="players" element={<Players />} />
                 <Route path="high-rollers" element={<HighRollers />} />
                 <Route path="calendar" element={<Calendar />} />
-                <Route path="chat" element={<Chat />} />
+
                 <Route path="leagues/:id" element={<LeagueDetails />} />
                 <Route path="leagues/:leagueId/sessions/:sessionId" element={<SessionDetails />} />
                 <Route path="sessions/:sessionId" element={<SessionDetails />} />
                 <Route path="invite" element={<ClubInvite />} />
               </Route>
             </Routes>
-            <ChatWidget />
+
           </Router>
         </NotificationProvider>
       </AuthProvider>

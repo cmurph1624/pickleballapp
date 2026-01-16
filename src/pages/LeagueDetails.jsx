@@ -325,6 +325,7 @@ const LeagueDetails = () => {
                 onClose={() => setSessionModalOpen(false)}
                 session={selectedSession}
                 league={league}
+                clubId={clubId}
             />
 
             <LeagueModal
