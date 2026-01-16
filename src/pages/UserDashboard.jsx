@@ -177,25 +177,30 @@ const UserDashboard = () => {
     };
 
     const handleClearBets = async () => {
-        if (!window.confirm("Are you sure you want to delete ALL bets? This cannot be undone and will not refund wallets.")) return;
+        if (!window.confirm("Are you sure you want to delete ALL bets? This calls for a fresh start! This will delete all bets AND reset every user's wallet back to $500.")) return;
 
         try {
+            // 1. Delete All Bets
             const betsRef = collection(db, 'bets');
             const betsSnap = await getDocs(betsRef);
 
-            if (betsSnap.empty) {
-                alert("No bets to delete.");
-                return;
-            }
+            const deletePromises = betsSnap.docs.map(b => deleteDoc(doc(db, 'bets', b.id)));
+            await Promise.all(deletePromises);
 
-            const promises = betsSnap.docs.map(b => deleteDoc(doc(db, 'bets', b.id)));
-            await Promise.all(promises);
+            // 2. Reset All Users' Wallets to 500
+            const usersRef = collection(db, 'users');
+            const usersSnap = await getDocs(usersRef);
 
-            alert(`Deleted ${betsSnap.size} bets.`);
+            const resetPromises = usersSnap.docs.map(userDoc =>
+                updateDoc(doc(db, 'users', userDoc.id), { walletBalance: 500 })
+            );
+            await Promise.all(resetPromises);
+
+            alert(`Deleted ${betsSnap.size} bets and reset ${usersSnap.size} user wallets to $500.`);
             setOpenBets([]);
         } catch (error) {
-            console.error("Error deleting bets:", error);
-            alert("Error deleting bets: " + error.message);
+            console.error("Error clearing data:", error);
+            alert("Error clearing data: " + error.message);
         }
     };
 

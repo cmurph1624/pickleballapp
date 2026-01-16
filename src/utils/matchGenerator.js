@@ -6,11 +6,13 @@ export const generateMatches = (players, gamesPerPlayer, mode = "STRICT_SOCIAL")
     let bestScore = Infinity;
 
     // SCORING CONFIGURATION
+    // SCORING CONFIGURATION
     const SCORING = {
         STRICT_SOCIAL: {
             missedOpponent: 5000,
             missedPartner: 2000,
-            repeatPartner: 500,
+            repeatPartner: 20000, // Unified High Penalty
+            repeatOpponent: 4000, // New: Penalize repeating opponents to spread them out
             skillVarianceType: 'linear', // 10 * diff
             skillVarianceWeight: 10
         },
@@ -18,6 +20,7 @@ export const generateMatches = (players, gamesPerPlayer, mode = "STRICT_SOCIAL")
             missedOpponent: 5000,
             missedPartner: 200,
             repeatPartner: 10000, // Extreme penalty to effectively ban repeats
+            repeatOpponent: 100, // Competitive cares less about variety, more about skill
             skillVarianceType: 'squared', // 100 * diff^2
             skillVarianceWeight: 100
         }
@@ -127,6 +130,9 @@ export const generateMatches = (players, gamesPerPlayer, mode = "STRICT_SOCIAL")
                 if (opponentCount === 0) {
                     // Missed opponent
                     totalPenalty += currentConfig.missedOpponent;
+                } else if (opponentCount > 1 && currentConfig.repeatOpponent) {
+                    // Repeat opponent (New Penalty)
+                    totalPenalty += (opponentCount - 1) * currentConfig.repeatOpponent;
                 }
             });
         });
@@ -158,13 +164,15 @@ export const generateMatches = (players, gamesPerPlayer, mode = "STRICT_SOCIAL")
             const checkPartner = (a, b) => (playerStats[a.id].partners[b.id] || 0);
 
             // Partner Repetition Penalty
-            const repeatPartnerPenalty = mode === "WEIGHTED_COMPETITIVE" ? 10000 : 500;
+            const repeatPartnerPenalty = mode === "WEIGHTED_COMPETITIVE" ? 10000 : 20000;
             score += checkPartner(p1, p2) * repeatPartnerPenalty;
             score += checkPartner(p3, p4) * repeatPartnerPenalty;
 
             // Opponent Repetition Penalty
             const checkOpponent = (player, opp) => (playerStats[player.id].opponents[opp.id] || 0);
-            const repeatOppPenalty = 200;
+
+            // Use config value or default high for Social, low for Comp if not defined (safe fallback)
+            const repeatOppPenalty = currentConfig.repeatOpponent || 4000;
 
             score += checkOpponent(p1, p3) * repeatOppPenalty;
             score += checkOpponent(p1, p4) * repeatOppPenalty;
@@ -204,170 +212,129 @@ export const generateMatches = (players, gamesPerPlayer, mode = "STRICT_SOCIAL")
                 !currentRoundPlayers.has(p.id)
             );
 
-            // If we can't find enough unique players for this round, we might be stuck.
-            // In a greedy approach, this might happen. Strict constraints might need backtracking (simulated annealing),
-            // but for now, let's just break or try to do best effort matching if we are desperate,
-            // though the requirement is STRICT unique. 
-            // If candidates < 4, this iteration fails to fill the round perfectly.
-            // With 2000 iterations, we hope to find one that fits.
             if (candidates.length < 4) {
-                // Optimization: If we can't fill the round, this schedule is likely bad.
-                // We could potentially break early, but let's let it finish with what it has?
-                // Actually, if we break here, we get a partial schedule.
-                // If we relax the round constraint, we get duplicates.
-                // Let's try to proceed looking for ANY needed candidates if STRICT filtering fails?
-                // No, requirement is to FIX the duplication. So we must stop if no valid candidates.
                 break;
             }
 
             let matchPlayers = [];
 
+            // Unified Robust Greedy Builder
+            // Both modes now use the smarter builder to avoid trapping themselves.
+            // The difference lies in how 'others' are sorted (Skill vs Random)
+
+            candidates = shuffle(candidates);
+            candidates.sort((a, b) => playerStats[a.id].gamesPlayed - playerStats[b.id].gamesPlayed);
+
+            const p1 = candidates[0];
+            const others = candidates.slice(1);
+
             if (mode === "WEIGHTED_COMPETITIVE") {
-                // 1. Pick primary candidate (needs games most, random tie-break)
-                candidates = shuffle(candidates);
-                candidates.sort((a, b) => playerStats[a.id].gamesPlayed - playerStats[b.id].gamesPlayed);
-
-                const p1 = candidates[0];
-                const others = candidates.slice(1);
                 const p1Rank = p1.hiddenRanking || 0;
-
                 // Sort others primarily by skill difference to p1
                 others.sort((a, b) => {
                     const diffA = Math.abs((a.hiddenRanking || 0) - p1Rank);
                     const diffB = Math.abs((b.hiddenRanking || 0) - p1Rank);
                     return diffA - diffB;
                 });
-
-                // 2. Greedy Group Builder (Randomized Window)
-                // Instead of taking the absolute best skill match (which can lead to dead ends/repeats),
-                // we look at the top N valid candidates and pick one randomly. 
-                // This adds variety and allows the 2000 iterations to find a unique solution.
-                matchPlayers = [p1];
-                const SEARCH_WINDOW = 12;
-
-                while (matchPlayers.length < 4) {
-                    const validNext = [];
-
-                    // 2a. Find top N valid candidates from 'others'
-                    for (const candidate of others) {
-                        if (validNext.length >= SEARCH_WINDOW) break;
-
-                        // Skip if already in the group
-                        if (matchPlayers.some(p => p.id === candidate.id)) continue;
-
-                        // Pruning for 3rd Player:
-                        // If P1 & P2 have played, they MUST split.
-                        // If P3 has also played with BOTH P1 and P2, then P3 cannot partner either.
-                        // This implies P1 needs P4, and P2 needs P4. Impossible.
-                        // So we must reject P3 if (P1-P2 bad) AND (P1-P3 bad) AND (P2-P3 bad).
-                        if (matchPlayers.length === 2) {
-                            const pA = matchPlayers[0], pB = matchPlayers[1], pC = candidate;
-                            const abBad = (playerStats[pA.id].partners[pB.id] || 0) > 0;
-                            const acBad = (playerStats[pA.id].partners[pC.id] || 0) > 0;
-                            const bcBad = (playerStats[pB.id].partners[pC.id] || 0) > 0;
-
-                            if (abBad && acBad && bcBad) continue;
-                        }
-
-                        // Special Check for the Final (4th) Player:
-                        // Ensure that adding this player allows for at least ONE valid permutation (no repeats).
-                        // If we don't check this, we might pick 4 people who form a "repeat trap" 
-                        // (no matter how we pair them, someone is a repeat).
-                        if (matchPlayers.length === 3) {
-                            const pA = matchPlayers[0], pB = matchPlayers[1], pC = matchPlayers[2], pD = candidate;
-
-                            const hasValidPerm = [
-                                [[pA, pB], [pC, pD]],
-                                [[pA, pC], [pB, pD]],
-                                [[pA, pD], [pB, pC]]
-                            ].some(perm => {
-                                const t1p1 = perm[0][0], t1p2 = perm[0][1];
-                                const t2p1 = perm[1][0], t2p2 = perm[1][1];
-                                const bad1 = (playerStats[t1p1.id].partners[t1p2.id] || 0) > 0;
-                                const bad2 = (playerStats[t2p1.id].partners[t2p2.id] || 0) > 0;
-                                return !bad1 && !bad2;
-                            });
-
-                            if (!hasValidPerm) continue; // Reject: This group would be impossible to pair uniquely
-                        }
-
-                        // For 2nd/3rd player, we use the Relaxed Constraint to keep options open
-                        let collisionCount = 0;
-                        for (const existing of matchPlayers) {
-                            if ((playerStats[existing.id].partners[candidate.id] || 0) > 0) {
-                                collisionCount++;
-                            }
-                        }
-
-                        // Relaxed Constraint:
-                        // If they have at least one potential fresh partner, they are valid candidates.
-                        if (collisionCount < matchPlayers.length) {
-                            validNext.push(candidate);
-                        }
-                    }
-
-                    // 2b. If we found valid candidates, pick one randomly
-                    if (validNext.length > 0) {
-                        const pickIndex = Math.floor(Math.random() * validNext.length);
-                        matchPlayers.push(validNext[pickIndex]);
-                    } else {
-                        // Dead end: No valid unique partners found for this group.
-                        // Break and let the fallback (Step 3) handle it by allowing repeats.
-                        break;
-                    }
-                }
-
-                // 3. Fallback: If we couldn't find 4 unique strangers, fill with best skill matches
-                // (This handles the edge case where it's mathematically impossible to avoid repeats)
-                if (matchPlayers.length < 4) {
-                    const set = new Set(matchPlayers.map(p => p.id));
-                    for (const candidate of others) {
-                        if (matchPlayers.length >= 4) break;
-                        if (!set.has(candidate.id)) {
-                            matchPlayers.push(candidate);
-                            set.add(candidate.id);
-                        }
-                    }
-                }
             } else {
-                // Standard Random (Social)
-                // 1. Pick primary candidate
-                candidates = shuffle(candidates);
-                candidates.sort((a, b) => playerStats[a.id].gamesPlayed - playerStats[b.id].gamesPlayed);
+                // STRICT_SOCIAL:
+                // 'others' is already shuffled (randomized), which provides the social mixing.
+                // We keep them in random order to encourage meeting new people randomly.
+            }
 
-                const p1 = candidates[0];
-                const others = candidates.slice(1);
-                // Note: 'others' is already shuffled, which is what we want for Social.
+            // Greedy Group Builder (Randomized Window)
+            matchPlayers = [p1];
+            const SEARCH_WINDOW = 6; // Balanced sweet spot for 12 players
 
-                // 2. Greedy Group Builder
-                matchPlayers = [p1];
+            while (matchPlayers.length < 4) {
+                const validNext = [];
 
-                for (const candidate of others) {
-                    if (matchPlayers.length >= 4) break;
+                // Find top N valid candidates from 'others'
+                // Dynamic Sorting based on "Clash Score" with current group
+                const candidateScores = others
+                    .filter(c => !matchPlayers.some(mp => mp.id === c.id))
+                    .map(c => {
+                        let score = 0;
+                        matchPlayers.forEach(existing => {
+                            // Penalize if they have been partners (Hard check exists later, but this pushes them down)
+                            score += (playerStats[c.id].partners[existing.id] || 0) * 100;
+                            // Penalize if they have been opponents
+                            score += (playerStats[c.id].opponents[existing.id] || 0);
+                        });
+                        return { player: c, score };
+                    })
+                    .sort((a, b) => a.score - b.score);
 
-                    // Check collision
-                    let hasPartneredWithAny = false;
+                for (const item of candidateScores) {
+                    const candidate = item.player;
+                    if (validNext.length >= SEARCH_WINDOW) break;
+
+                    // Skip if already in the group (handled by filter, but double check)
+                    if (matchPlayers.some(p => p.id === candidate.id)) continue;
+
+                    // Pruning for 3rd Player:
+                    if (matchPlayers.length === 2) {
+                        const pA = matchPlayers[0], pB = matchPlayers[1], pC = candidate;
+                        const abBad = (playerStats[pA.id].partners[pB.id] || 0) > 0;
+                        const acBad = (playerStats[pA.id].partners[pC.id] || 0) > 0;
+                        const bcBad = (playerStats[pB.id].partners[pC.id] || 0) > 0;
+
+                        if (abBad && acBad && bcBad) continue;
+                    }
+
+                    // Special Check for the Final (4th) Player:
+                    // Ensure that adding this player allows for at least ONE valid permutation (no repeats).
+                    if (matchPlayers.length === 3) {
+                        const pA = matchPlayers[0], pB = matchPlayers[1], pC = matchPlayers[2], pD = candidate;
+
+                        const hasValidPerm = [
+                            [[pA, pB], [pC, pD]],
+                            [[pA, pC], [pB, pD]],
+                            [[pA, pD], [pB, pC]]
+                        ].some(perm => {
+                            const t1p1 = perm[0][0], t1p2 = perm[0][1];
+                            const t2p1 = perm[1][0], t2p2 = perm[1][1];
+                            const bad1 = (playerStats[t1p1.id].partners[t1p2.id] || 0) > 0;
+                            const bad2 = (playerStats[t2p1.id].partners[t2p2.id] || 0) > 0;
+                            return !bad1 && !bad2;
+                        });
+
+                        if (!hasValidPerm) continue; // Reject: This group would be impossible to pair uniquely
+                    }
+
+                    // For 2nd/3rd player, we use the Relaxed Constraint to keep options open
+                    let collisionCount = 0;
                     for (const existing of matchPlayers) {
                         if ((playerStats[existing.id].partners[candidate.id] || 0) > 0) {
-                            hasPartneredWithAny = true;
-                            break;
+                            collisionCount++;
                         }
                     }
 
-                    if (!hasPartneredWithAny) {
-                        matchPlayers.push(candidate);
+                    // Relaxed Constraint:
+                    // If they have at least one potential fresh partner, they are valid candidates.
+                    if (collisionCount < matchPlayers.length) {
+                        validNext.push(candidate.player || candidate);
                     }
                 }
 
-                // 3. Fallback
-                if (matchPlayers.length < 4) {
-                    const set = new Set(matchPlayers.map(p => p.id));
-                    for (const candidate of others) {
-                        if (matchPlayers.length >= 4) break;
-                        if (!set.has(candidate.id)) {
-                            matchPlayers.push(candidate);
-                            set.add(candidate.id);
-                        }
+                // If we found valid candidates, pick one randomly
+                if (validNext.length > 0) {
+                    const pickIndex = Math.floor(Math.random() * validNext.length);
+                    matchPlayers.push(validNext[pickIndex]);
+                } else {
+                    // Dead end: No valid unique partners found for this group.
+                    break;
+                }
+            }
+
+            // 3. Fallback: If we couldn't find 4 unique strangers, fill with best available
+            if (matchPlayers.length < 4) {
+                const set = new Set(matchPlayers.map(p => p.id));
+                for (const candidate of others) {
+                    if (matchPlayers.length >= 4) break;
+                    if (!set.has(candidate.id)) {
+                        matchPlayers.push(candidate);
+                        set.add(candidate.id);
                     }
                 }
             }

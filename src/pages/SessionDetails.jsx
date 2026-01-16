@@ -150,6 +150,33 @@ const SessionDetails = () => {
         }
     };
 
+    const handleRecalculateSpreads = async () => {
+        if (!session || !matches.length) return;
+        if (!window.confirm("Recalculate spreads for all existing matches based on current player ratings?")) return;
+
+        setLoading(true);
+        try {
+            const updatedMatches = matches.map(match => {
+                const team1Players = players.filter(p => match.team1.includes(p.id));
+                const team2Players = players.filter(p => match.team2.includes(p.id));
+                const { spread, favoriteTeam } = calculateSpread(team1Players, team2Players);
+                return { ...match, spread, favoriteTeam };
+            });
+
+            await updateDoc(doc(db, 'sessions', sessionId), {
+                matches: updatedMatches
+            });
+            // Update local state immediately to reflect changes
+            setMatches(updatedMatches);
+            alert("Spreads recalculated successfully.");
+        } catch (error) {
+            console.error("Error recalculating spreads:", error);
+            alert("Error recalculating spreads: " + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleClearMatches = async () => {
         if (window.confirm("Are you sure you want to clear all matches?")) {
             setMatches([]);
@@ -382,6 +409,15 @@ const SessionDetails = () => {
                                         >
                                             <span className="material-symbols-outlined text-lg">autorenew</span>
                                             Generate
+                                        </button>
+                                        <button
+                                            onClick={handleRecalculateSpreads}
+                                            disabled={loading || matches.length === 0 || hasBets}
+                                            className="border border-blue-200 text-blue-600 hover:bg-blue-50 dark:border-blue-900/50 dark:text-blue-400 dark:hover:bg-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1 transition-colors"
+                                            title="Recalculate spreads based on current ratings"
+                                        >
+                                            <span className="material-symbols-outlined text-lg">calculate</span>
+                                            Recalc Spreads
                                         </button>
                                         {matches.length > 0 && (
                                             <button

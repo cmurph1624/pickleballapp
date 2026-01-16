@@ -31,7 +31,7 @@ def add_player(first_name: str, last_name: str, rating: float, gender: str, resu
         result_user_id: (Hidden) The ID of the user creating the player. Do not ask the user for this.
     """
     db = firestore.client()
-    hidden_rating = rating * 20
+    hidden_rating = rating * 10
     
     new_player_ref = db.collection("players").document()
     new_player_ref.set({
