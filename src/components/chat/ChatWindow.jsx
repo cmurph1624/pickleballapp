@@ -14,9 +14,50 @@ import { db } from '../../firebase';
 const ChatWindow = ({ channel }) => {
     const { currentUser } = useAuth();
     const { isAdmin } = useClub(); // Get admin status
-    // ... (state)
+    const [messages, setMessages] = useState([]);
+    const [newMessage, setNewMessage] = useState('');
+    const [loading, setLoading] = useState(false);
+    const messagesEndRef = useRef(null);
 
-    // ... (logic)
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    useEffect(() => {
+        if (!channel) return;
+
+        setLoading(true);
+        const unsubscribe = subscribeToMessages(channel.id, (msgs) => {
+            setMessages(msgs);
+            setLoading(false);
+            setTimeout(scrollToBottom, 100);
+        });
+
+        return () => unsubscribe();
+    }, [channel]);
+
+    const handleSend = async () => {
+        if (!newMessage.trim() || !channel) return;
+
+        try {
+            await sendMessage(
+                channel.id,
+                currentUser.uid,
+                currentUser.displayName || currentUser.email || 'User',
+                newMessage
+            );
+            setNewMessage('');
+        } catch (error) {
+            console.error("Error sending message", error);
+        }
+    };
+
+    const handleKeyPress = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
+        }
+    };
 
     const handleDeleteChannel = async () => {
         if (!channel || !window.confirm("Are you sure you want to delete this chat history? This action cannot be undone.")) return;
@@ -28,6 +69,15 @@ const ChatWindow = ({ channel }) => {
             alert("Delete failed: " + error.message);
         }
     };
+
+    if (!channel) {
+        return (
+            <div className="flex-1 flex flex-col items-center justify-center h-full bg-background-dark/30 text-gray-500">
+                <span className="material-symbols-outlined text-4xl mb-2 opacity-50">forum</span>
+                <p>Select a channel to start chatting</p>
+            </div>
+        );
+    }
 
     // ...
 
