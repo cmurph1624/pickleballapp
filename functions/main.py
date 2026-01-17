@@ -3,5 +3,5 @@ from firebase_admin import initialize_app
 
 initialize_app()
 
-# Chat agent functionality has been removed.
-# This file is now a placeholder for future cloud functions.
+# Import tools to register Cloud Functions
+from tools.communication_hub import sync_session_channel, sync_club_channel

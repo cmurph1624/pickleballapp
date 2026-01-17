@@ -142,6 +142,7 @@ const DashboardLayout = ({ children }) => {
                                         {[
                                             { name: 'Leagues', icon: 'emoji_events', path: `/clubs/${club.id}/leagues` },
                                             { name: 'Players', icon: 'group', path: `/clubs/${club.id}/players` },
+                                            { name: 'Chat', icon: 'chat', path: `/clubs/${club.id}/chat` },
                                             { name: 'High Rollers', icon: 'paid', path: `/clubs/${club.id}/high-rollers` },
                                             { name: 'Calendar', icon: 'calendar_month', path: `/clubs/${club.id}/calendar` }
                                         ].map(item => (

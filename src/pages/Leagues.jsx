@@ -108,11 +108,22 @@ const Leagues = () => {
 
     const handleDeleteSession = async (e, session) => {
         e.stopPropagation();
-        if (window.confirm(`Delete ${session.name}?`)) {
+        if (window.confirm(`Are you sure you want to delete ${session.name}?`)) {
             try {
+                // Manually delete the associated channel FIRST
+                try {
+                    const channelId = `session_${session.id}`;
+                    await deleteDoc(doc(db, 'channels', channelId));
+                } catch (channelError) {
+                    // Silently ignore channel errors (e.g. if it doesn't exist)
+                    console.warn("Channel delete skipped/failed:", channelError);
+                }
+
+                // Then delete the session
                 await deleteDoc(doc(db, 'sessions', session.id));
             } catch (error) {
                 console.error("Error deleting session:", error);
+                alert("Error deleting session: " + error.message);
             }
         }
     };

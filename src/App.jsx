@@ -21,6 +21,7 @@ import { ClubProvider } from './contexts/ClubContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { Outlet } from 'react-router-dom';
 import ClubDashboard from './pages/ClubDashboard';
+import ChatPage from './pages/ChatPage';
 
 function App() {
   return (
@@ -45,6 +46,7 @@ function App() {
                 <Route path="leagues" element={<Leagues />} />
                 <Route path="players" element={<Players />} />
                 <Route path="high-rollers" element={<HighRollers />} />
+                <Route path="chat" element={<ChatPage />} />
                 <Route path="calendar" element={<Calendar />} />
 
                 <Route path="leagues/:id" element={<LeagueDetails />} />
