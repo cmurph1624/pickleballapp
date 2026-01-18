@@ -25,7 +25,22 @@ def generate_schedule(req: https_fn.CallableRequest) -> any:
     matches = scheduler.generate_matches(players, games_per_player, mode)
     return {"matches": matches}
 
-from tools import sessions
+from tools import sessions, betting
+
+@https_fn.on_call()
+def place_bet(req: https_fn.CallableRequest) -> any:
+    """Places a bet. Input: { matchId, teamPicked, amount, weekId }"""
+    uid = req.auth.uid if req.auth else None
+    if not uid: return {"error": "Unauthenticated"}
+    
+    data = req.data
+    return betting.place_bet(
+        user_id=uid,
+        match_id=data.get('matchId'),
+        team_picked=data.get('teamPicked'),
+        amount=data.get('amount'),
+        week_id=data.get('weekId')
+    )
 
 @https_fn.on_call()
 def complete_session(req: https_fn.CallableRequest) -> any:

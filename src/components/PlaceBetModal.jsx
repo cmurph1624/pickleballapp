@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { doc, runTransaction, collection, query, where, getDocs } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { placeBet } from '../services/SessionService';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 const PlaceBetModal = ({ open, onClose, match, weekId, team1Name, team2Name, userWallet }) => {
     const [teamPicked, setTeamPicked] = useState('1');
@@ -57,36 +58,7 @@ const PlaceBetModal = ({ open, onClose, match, weekId, team1Name, team2Name, use
         }
 
         try {
-            await runTransaction(db, async (transaction) => {
-                const userRef = doc(db, 'users', auth.currentUser.uid);
-                const userDoc = await transaction.get(userRef);
-
-                if (!userDoc.exists()) {
-                    throw "User not found";
-                }
-
-                const currentBalance = userDoc.data().walletBalance || 0;
-                if (betAmount > currentBalance) {
-                    throw "You do not have enough money in your wallet to place a bet";
-                }
-
-                const newBalance = currentBalance - betAmount;
-                transaction.update(userRef, { walletBalance: newBalance });
-
-                const newBetRef = doc(collection(db, 'bets'));
-                transaction.set(newBetRef, {
-                    userId: auth.currentUser.uid,
-                    weekId: weekId,
-                    matchId: match.id || `match_${Date.now()}`,
-                    teamPicked: parseInt(teamPicked),
-                    amount: betAmount,
-                    spreadAtTimeOfBet: match.spread,
-                    favoriteTeamAtTimeOfBet: match.favoriteTeam,
-                    status: 'OPEN',
-                    createdAt: new Date()
-                });
-            });
-
+            await placeBet(match.id, teamPicked, parseInt(amount), weekId);
             onClose();
         } catch (err) {
             console.error("Error placing bet:", err);

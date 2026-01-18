@@ -26,6 +26,32 @@ export const completeSession = async (sessionId) => {
 };
 
 /**
+ * Places a bet via Cloud Function.
+ * Validates balance server-side and creates bet record.
+ * 
+ * @param {string} matchId 
+ * @param {string} teamPicked - '1' or '2'
+ * @param {number} amount 
+ * @param {string} weekId - Session ID
+ */
+export const placeBet = async (matchId, teamPicked, amount, weekId) => {
+    console.log(`Placing bet on match ${matchId} for team ${teamPicked} amount ${amount}`);
+    const functions = getFunctions();
+    const placeBetFn = httpsCallable(functions, 'place_bet');
+
+    try {
+        const result = await placeBetFn({ matchId, teamPicked, amount, weekId });
+        if (result.data.error) throw new Error(result.data.error);
+
+        console.log("Bet placed successfully.");
+        return result.data;
+    } catch (error) {
+        console.error("Error placing bet:", error);
+        throw error;
+    }
+};
+
+/**
  * Substitutes a player via Cloud Function.
  * Handles bet settlement (forfeit/refund) automatically.
  * 

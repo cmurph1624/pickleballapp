@@ -214,3 +214,72 @@ def _settle_sub_bet(transaction, bet_ref, old_player_team):
         'payout': payout,
         'note': note
     })
+
+def place_bet(user_id, match_id, team_picked, amount, week_id):
+    """
+    Places a bet for a user on a match.
+    """
+    db = firestore.client()
+    
+    # Verify amount
+    if amount <= 0: return {"error": "Invalid amount"}
+
+    user_ref = db.collection('users').document(user_id)
+    # We need to lock in the spread/odds from the match to ensure integrity
+    # Query match from session?? match_id is unique but stored inside session.
+    # We can query all sessions for the match or assume week_id (session_id) is passed correctly.
+    
+    if not week_id: return {"error": "Missing session ID (weekId)"}
+    
+    session_ref = db.collection('sessions').document(week_id)
+    bet_ref = db.collection('bets').document()
+    
+    try:
+        _place_bet_transaction(db.transaction(), user_ref, session_ref, bet_ref, user_id, match_id, team_picked, amount, week_id)
+        return {"success": True, "betId": bet_ref.id}
+    except Exception as e:
+        return {"error": str(e)}
+
+@firestore.transactional
+def _place_bet_transaction(transaction, user_ref, session_ref, bet_ref, user_id, match_id, team_picked, amount, week_id):
+    # 1. Check User Balance
+    user_snap = user_ref.get(transaction=transaction)
+    if not user_snap.exists: raise Exception("User not found")
+    
+    user_data = user_snap.to_dict()
+    current_balance = user_data.get('walletBalance', 0)
+    
+    if current_balance < amount:
+        raise Exception("Insufficient funds")
+    
+    # 2. Get Match Details (Spread, Favorite)
+    session_snap = session_ref.get(transaction=transaction)
+    if not session_snap.exists: raise Exception("Session not found")
+    
+    session = session_snap.to_dict()
+    matches = session.get('matches', [])
+    match = next((m for m in matches if m['id'] == match_id), None)
+    
+    if not match: raise Exception("Match not found")
+    
+    # Check if match is already played? (Optional, but good practice)
+    if match.get('team1Score') is not None: raise Exception("Match already finished")
+
+    # 3. Deduct Balance
+    transaction.update(user_ref, {'walletBalance': current_balance - amount})
+    
+    # 4. Create Bet
+    bet_data = {
+        'userId': user_id,
+        'weekId': week_id,
+        'matchId': match_id,
+        'teamPicked': int(team_picked),
+        'amount': float(amount),
+        'spreadAtTimeOfBet': match.get('spread', 0),
+        'favoriteTeamAtTimeOfBet': match.get('favoriteTeam', 0),
+        'status': 'OPEN',
+        'createdAt': firestore.SERVER_TIMESTAMP
+    }
+    
+    transaction.set(bet_ref, bet_data)
+
