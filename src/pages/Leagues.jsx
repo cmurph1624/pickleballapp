@@ -173,7 +173,7 @@ const Leagues = () => {
     };
 
     const filteredLeagues = leagues.filter(l => showArchived ? true : !l.archived);
-    const filteredPickupSessions = pickupSessions.filter(s => showArchived ? true : !s.archived);
+    const filteredPickupSessions = pickupSessions.filter(s => showArchived ? true : (!s.archived && s.status !== 'COMPLETED'));
 
     return (
         <div className="w-full">

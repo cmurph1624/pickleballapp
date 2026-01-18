@@ -300,9 +300,9 @@ const UserDashboard = () => {
         return mySessions.filter(session => {
             if (showCompleted) return true; // Show all if toggle is on
 
-            // Otherwise, show only upcoming
+            // Otherwise, show only upcoming and not completed
             const d = session.scheduledDate.toDate ? session.scheduledDate.toDate() : new Date(session.scheduledDate);
-            return d > now;
+            return d > now && session.status !== 'COMPLETED';
         });
     };
 
@@ -481,8 +481,8 @@ const UserDashboard = () => {
                                                 <span>{time}</span>
                                             </div>
 
-                                            {/* Player Counts & Leave Action - Only for future/upcoming */}
-                                            {!isPast && (
+                                            {/* Player Counts & Leave Action - Only for future/upcoming and NOT completed */}
+                                            {(!isPast && session.status !== 'COMPLETED') && (
                                                 <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
                                                     <div className="flex justify-between items-center mb-2">
                                                         <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">
