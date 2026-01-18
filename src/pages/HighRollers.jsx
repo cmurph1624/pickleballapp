@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import TransactionHistoryModal from '../components/TransactionHistoryModal';
 
 const HighRollers = () => {
@@ -13,7 +14,7 @@ const HighRollers = () => {
         const fetchHighRollers = async () => {
             try {
                 // 1. Fetch Users
-                const q = query(collection(db, 'users'), orderBy('walletBalance', 'desc'), limit(20));
+                const q = query(collection(db, 'users'), orderBy('walletBalance', 'desc'), limit(50));
                 const snapshot = await getDocs(q);
                 const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
@@ -54,6 +55,29 @@ const HighRollers = () => {
         setHistoryModalOpen(true);
     };
 
+    const handleResetWorld = async () => {
+        if (!confirm("⚠️ WARNING ⚠️\n\nAre you sure you want to delete ALL bets and reset EVERYONE'S wallet to $500?\n\nThis action cannot be undone.")) {
+            return;
+        }
+
+        const confirm2 = prompt("Type 'RESET' to confirm this destructive action:");
+        if (confirm2 !== 'RESET') return;
+
+        setLoading(true);
+        try {
+            const functions = getFunctions();
+            const resetWorld = httpsCallable(functions, 'reset_world');
+            const result = await resetWorld();
+
+            alert(`Success!\nDeleted Bets: ${result.data.deletedBets}\nReset Users: ${result.data.resetUsers}`);
+            window.location.reload(); // Refresh to show new 500 balances
+        } catch (error) {
+            console.error("Error resetting world:", error);
+            alert("Error: " + error.message);
+            setLoading(false);
+        }
+    };
+
     if (loading) return (
         <div className="flex justify-center items-center min-h-[50vh]">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -62,14 +86,23 @@ const HighRollers = () => {
 
     return (
         <div className="w-full">
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-800 dark:text-white flex items-center gap-3">
-                    <span className="material-symbols-outlined text-4xl text-yellow-500">emoji_events</span>
-                    High Rollers
-                </h1>
-                <p className="text-gray-500 dark:text-gray-400 mt-2">
-                    The wealthiest players in the league. Click on a player to view their history.
-                </p>
+            <div className="mb-8 flex justify-between items-start">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-800 dark:text-white flex items-center gap-3">
+                        <span className="material-symbols-outlined text-4xl text-yellow-500">emoji_events</span>
+                        High Rollers
+                    </h1>
+                    <p className="text-gray-500 dark:text-gray-400 mt-2">
+                        The wealthiest players in the league. Click on a player to view their history.
+                    </p>
+                </div>
+                <button
+                    onClick={handleResetWorld}
+                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-bold shadow-sm transition-colors flex items-center gap-2"
+                >
+                    <span className="material-symbols-outlined">restart_alt</span>
+                    Reset Global Wallets
+                </button>
             </div>
 
             <div className="bg-surface-light dark:bg-surface-dark rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">

@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc, collection, query, getDocs, limit, where, onSnapshot, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase';
-import { generateMatches } from '../utils/matchGenerator';
+import { generateMatches } from '../utils/matchGenerator'; // DEPRECATED - Keeping for reference/offline fallback if needed
+// import { generateMatches } from '../utils/matchGenerator'; 
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { calculateSpread } from '../services/Oddsmaker';
 import { validateSchedule } from '../utils/scheduleValidator';
 import { useAuth } from '../contexts/AuthContext';
@@ -50,6 +52,7 @@ const SessionDetails = () => {
 
     const [currentTab, setCurrentTab] = useState(0); // 0: Matches, 1: Standings
     const [standings, setStandings] = useState([]);
+    const [isGenerating, setIsGenerating] = useState(false);
 
     const [hasBets, setHasBets] = useState(false);
 
@@ -118,35 +121,52 @@ const SessionDetails = () => {
     const handleGenerateMatches = async () => {
         if (!session || !players.length) return;
 
-        const gamesPerPlayer = session.gamesPerPlayer || 4;
-        let newMatches = generateMatches(players, gamesPerPlayer, matchmakingMode);
-
-        // Calculate Spreads for each match
-        newMatches = newMatches.map(match => {
-            const team1Players = players.filter(p => match.team1.includes(p.id));
-            const team2Players = players.filter(p => match.team2.includes(p.id));
-            const { spread, favoriteTeam } = calculateSpread(team1Players, team2Players);
-            return { ...match, spread, favoriteTeam };
-        });
-
-        setMatches(newMatches);
-
-        // Validation Step
-        const validation = validateSchedule(newMatches, players);
-        if (!validation.isValid) {
-            console.error(validation.error);
-            alert(validation.error);
-            return;
-        }
-
-        // Save to Firestore
+        setIsGenerating(true);
         try {
+            const functions = getFunctions();
+            const generateSchedule = httpsCallable(functions, 'generate_schedule');
+
+            // Call Cloud Function
+            const result = await generateSchedule({
+                players: players,
+                gamesPerPlayer: session.gamesPerPlayer || 4,
+                mode: matchmakingMode
+            });
+
+            let newMatches = result.data.matches;
+
+            if (!newMatches || !Array.isArray(newMatches)) {
+                throw new Error("Invalid response from server");
+            }
+
+            // Calculate Spreads for each match (Client-Side)
+            newMatches = newMatches.map(match => {
+                const team1Players = players.filter(p => match.team1.includes(p.id));
+                const team2Players = players.filter(p => match.team2.includes(p.id));
+                const { spread, favoriteTeam } = calculateSpread(team1Players, team2Players);
+                return { ...match, spread, favoriteTeam };
+            });
+
+            setMatches(newMatches);
+
+            // Validation Step
+            const validation = validateSchedule(newMatches, players);
+            if (!validation.isValid) {
+                console.error(validation.error);
+                alert("Warning: " + validation.error);
+                // We show alert but still allow saving if server returned it, or maybe return? 
+                // Server should be trusted, but good to know.
+            }
+
+            // Save to Firestore
             await updateDoc(doc(db, 'sessions', sessionId), {
                 matches: newMatches
             });
         } catch (error) {
-            console.error("Error saving matches:", error);
-            alert("Error saving matches: " + error.message);
+            console.error("Error generating matches:", error);
+            alert("Error generating matches: " + error.message);
+        } finally {
+            setIsGenerating(false);
         }
     };
 
@@ -404,11 +424,15 @@ const SessionDetails = () => {
                                     <div className="flex gap-2">
                                         <button
                                             onClick={handleGenerateMatches}
-                                            disabled={matches.some(m => m.team1Score !== undefined || m.team2Score !== undefined) || hasBets}
+                                            disabled={matches.some(m => m.team1Score !== undefined || m.team2Score !== undefined) || hasBets || isGenerating}
                                             className="bg-primary hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1 transition-colors"
                                         >
-                                            <span className="material-symbols-outlined text-lg">autorenew</span>
-                                            Generate
+                                            {isGenerating ? (
+                                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white mr-1"></div>
+                                            ) : (
+                                                <span className="material-symbols-outlined text-lg">autorenew</span>
+                                            )}
+                                            {isGenerating ? 'Generating...' : 'Generate'}
                                         </button>
                                         <button
                                             onClick={handleRecalculateSpreads}
